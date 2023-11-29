@@ -12,6 +12,7 @@
 #include "string.h"
 #include "powerbutton.h"
 #include "http.h"
+#include "storage.h"
 
 void printing_function(void *arg) {
     int *value = (int *) arg;
@@ -30,6 +31,11 @@ void start_server(void *arg) {
 }
 
 void app_main() {
+    storage_init();
+    nvs_configuration_t configuration;
+    storage_get_configuration(&configuration);
+    printf("[main]: data read debounce_ms: %i, long_press_ms: %i, action_delay_ms %i\n", configuration.debounce_ms, configuration.long_press_ms, configuration.action_delay_ms);
+
     button_t my_button;
     power_button_t my_power_button;
     power_button_press_t my_press_pattern[3] = {PRESS, PRESS, PRESS};
@@ -39,8 +45,8 @@ void app_main() {
     int counter2 = 0;
 
     button_init(1);
-    button_configure(0, PULL_UP, 10, false, &my_button);
-    power_button_configure(&my_button, &my_power_button, 300, 500);
+    button_configure(0, PULL_UP, configuration.debounce_ms, false, &my_button);
+    power_button_configure(&my_button, &my_power_button, configuration.long_press_ms, configuration.action_delay_ms);
     power_button_add_action(&my_power_button, my_press_pattern, 3, printing_function, &counter1);
     power_button_add_action(&my_power_button, my_press_pattern, 2, other_printing_function, &counter2);
     power_button_add_action(&my_power_button, configuration_server_pattern, 3, start_server, NULL);
