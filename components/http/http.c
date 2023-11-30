@@ -16,6 +16,7 @@
 
 #include "storage.h"
 #include "cJSON.h"
+#include "cJSON_validator.h"
 // extern const uint8_t index_html_start[] asm("_binary_index_html_start");
 // extern const uint8_t index_html_end[]   asm("_binary_index_html_end");
 // extern const uint8_t home_html_start[] asm("_binary_home_html_start");
@@ -165,172 +166,78 @@ esp_err_t configuration_server_configuration_get(httpd_req_t *req) {
 }
 
 esp_err_t configuration_server_configuration_set(httpd_req_t *req) {
-    //TODO: this function needs some serious cleanup and optimization
     char content[100];
-    char response[50];
     int ret = httpd_req_recv(req, content, 100);
-    cJSON *error = cJSON_CreateObject();
-    cJSON *error_msg; 
-    char *string;
+    cJSON_validator_t validator;
 
-    if (ret == 0) {
-        error_msg = cJSON_AddStringToObject(error, "error", "Body should not be empty");
-        string = cJSON_Print(error);
-        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, string);
-        free(string);
+    json_validator_init(content, &validator, NULL);
+    json_validator_object_not_empty(&validator, NULL);
+    char *array_of_keys[] = {"actionDelayMs", "longPressMs", "debounceMs"};
+    json_validator_contains_only_any_of(&validator, array_of_keys, 3, NULL); //verify that the object has only one of these keys
+
+    //validate only if key exists since we already know that at least one exits from the previouse check
+    json_validator_if_key_exists_is_number(&validator, "actionDelayMs", NULL);
+    json_validator_if_key_exists_is_integer(&validator, "actionDelayMs", NULL);
+    json_validator_if_key_exists_is_integer_between(&validator, "actionDelayMs", 100, 2000, NULL);
+
+    json_validator_if_key_exists_is_number(&validator, "debounceMs", NULL);
+    json_validator_if_key_exists_is_integer(&validator, "debounceMs", NULL);
+    json_validator_if_key_exists_is_integer_between(&validator, "debounceMs", 0, 200, NULL);
+
+    json_validator_if_key_exists_is_number(&validator, "longPressMs", NULL);
+    json_validator_if_key_exists_is_integer(&validator, "longPressMs", NULL);
+    json_validator_if_key_exists_is_integer_between(&validator, "longPressMs", 200, 500, NULL);
+
+    if (!validator.valid) { //not valid return error
+        cJSON *error = cJSON_CreateObject();
+        cJSON_AddStringToObject(error, "error", validator.error_message);
+        char *error_string = cJSON_Print(error);
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, error_string);
+
+        json_validator_delete(&validator);
         cJSON_Delete(error);
+        free(error_string);
+        return ESP_OK;
     }
 
-
-    if (ret <= 0) {
-        if (ret == HTTPD_SOCK_ERR_TIMEOUT) {
-            httpd_resp_send_408(req);
-        }
-        return ESP_FAIL;
-    }
-
-    cJSON *configuration_received_json = cJSON_Parse(content);
-    if (configuration_received_json == NULL) {
-        const char *error_ptr = cJSON_GetErrorPtr();
-        if (error_ptr != NULL) {
-
-
-            sprintf(response, "Error before: %s\n", error_ptr);
-            error_msg = cJSON_AddStringToObject(error, "error", response);
-            string = cJSON_Print(error);
-
-            httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, string);
-            cJSON_Delete(configuration_received_json);
-            cJSON_Delete(error);
-            free(string);
-            return ESP_OK;
-        }
-    }
-
-    //check if values are integers
+    //now we need to store the json
     nvs_configuration_t configuration;
     storage_get_configuration(&configuration);
 
-    cJSON *action_delay = cJSON_GetObjectItemCaseSensitive(configuration_received_json, "actionDelayMs");
-    cJSON *long_press_ms = cJSON_GetObjectItemCaseSensitive(configuration_received_json, "longPressMs");
-    cJSON *debounce_ms = cJSON_GetObjectItemCaseSensitive(configuration_received_json, "debounceMs");
+    cJSON *debounce = cJSON_GetObjectItemCaseSensitive(validator.json, "debounceMs");
+    cJSON *long_press = cJSON_GetObjectItemCaseSensitive(validator.json, "longPressMs");
+    cJSON *action_delay = cJSON_GetObjectItemCaseSensitive(validator.json, "actionDelayMs");
 
-    //TODO: this should probably be a function
+    if (debounce != NULL) {
+        configuration.debounce_ms = debounce->valueint;
+    }
 
-    if (cJSON_IsNumber(action_delay)) {
-        if (((double)action_delay->valueint) != action_delay->valuedouble) {
-            error_msg = cJSON_AddStringToObject(error, "error", "action delay should be an integer");
-            string = cJSON_Print(error);
-            httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, string);
+    if (long_press != NULL) {
+        configuration.long_press_ms = long_press->valueint;
+    }
 
-            cJSON_Delete(error);
-            cJSON_Delete(configuration_received_json);
-            free(string);
-            return ESP_OK;
-        }
-        //check if it is between x and y
-        if (action_delay->valueint < 100 || action_delay->valueint > 2000) {
-            error_msg = cJSON_AddStringToObject(error, "error", "action delay should be a value between 100 and 2000");
-            string = cJSON_Print(error);
-            httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, string);
-
-            cJSON_Delete(error);
-            cJSON_Delete(configuration_received_json);
-            free(string);
-            return ESP_OK;
-        }
+    if (action_delay != NULL) {
         configuration.action_delay_ms = action_delay->valueint;
-    } else {
-        error_msg = cJSON_AddStringToObject(error, "error", "action delay should be an integer");
-        string = cJSON_Print(error);
-        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, string);
-
-        cJSON_Delete(error);
-        cJSON_Delete(configuration_received_json);
-        free(string);
-        return ESP_OK;
     }
 
-    if (cJSON_IsNumber(long_press_ms)) {
-        if (((double)long_press_ms->valueint) != long_press_ms->valuedouble) {
-            error_msg = cJSON_AddStringToObject(error, "error", "long press should be an integer");
-            string = cJSON_Print(error);
-            httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, string);
-            cJSON_Delete(error);
-            cJSON_Delete(configuration_received_json);
-            free(string);
-            return ESP_OK;
-        }
-        //check if it is between x and y
-        if (long_press_ms->valueint < 200 || long_press_ms->valueint > 500) {
+    storage_set_configuration(&configuration); 
 
-            error_msg = cJSON_AddStringToObject(error, "error", "long press should be a value between 200 and 500");
-            string = cJSON_Print(error);
-            httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, string);
-            cJSON_Delete(error);
-            cJSON_Delete(configuration_received_json);
-            free(string);
-            return ESP_OK;
-        }
-        configuration.long_press_ms = long_press_ms->valueint;
-    } else {
-        error_msg = cJSON_AddStringToObject(error, "error", "long press should be an integer");
-        string = cJSON_Print(error);
-        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, string);
-        cJSON_Delete(error);
-        cJSON_Delete(configuration_received_json);
-        free(string);
-        return ESP_OK;
-    }
-
-    if (cJSON_IsNumber(debounce_ms)) {
-        if (((double)debounce_ms->valueint) != debounce_ms->valuedouble) {
-            error_msg = cJSON_AddStringToObject(error, "error", "debounce should be an integer");
-            string = cJSON_Print(error);
-            httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, string);
-            cJSON_Delete(error);
-            cJSON_Delete(configuration_received_json);
-            free(string);
-            return ESP_OK;
-        }
-        //check if it is between x and y
-        if (debounce_ms->valueint < 0 || debounce_ms->valueint > 200) {
-            error_msg = cJSON_AddStringToObject(error, "error", "debounce should be a value between 0 and 200");
-            string = cJSON_Print(error);
-            httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, string);
-            cJSON_Delete(error);
-            cJSON_Delete(configuration_received_json);
-            free(string);
-            return ESP_OK;
-        }
-        configuration.debounce_ms = debounce_ms->valueint;
-    } else {
-        error_msg = cJSON_AddStringToObject(error, "error", "debounce should be an integer");
-        string = cJSON_Print(error);
-        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, string);
-
-        cJSON_Delete(error);
-        cJSON_Delete(configuration_received_json);
-        free(string);
-        return ESP_OK;
-    }
-
-    storage_set_configuration(&configuration);
-
+    storage_get_configuration(&configuration);
     cJSON *configuration_json = cJSON_CreateObject();
-    cJSON *debounce_ms_new = cJSON_CreateNumber(configuration.debounce_ms);
-    cJSON *action_delay_new = cJSON_CreateNumber(configuration.action_delay_ms);
-    cJSON *long_press_ms_new = cJSON_CreateNumber(configuration.long_press_ms);
+    debounce = cJSON_CreateNumber(configuration.debounce_ms);
+    action_delay = cJSON_CreateNumber(configuration.action_delay_ms);
+    long_press = cJSON_CreateNumber(configuration.long_press_ms);
 
-    cJSON_AddItemToObject(configuration_json, "debounceMs", debounce_ms_new);
-    cJSON_AddItemToObject(configuration_json, "actionDelayMs", action_delay_new);
-    cJSON_AddItemToObject(configuration_json, "longPressMs", long_press_ms_new);
+    cJSON_AddItemToObject(configuration_json, "debounceMs", debounce);
+    cJSON_AddItemToObject(configuration_json, "actionDelayMs", action_delay);
+    cJSON_AddItemToObject(configuration_json, "longPressMs", long_press);
 
-    string = cJSON_Print(configuration_json);
+    char *string_json = cJSON_Print(configuration_json);
 
-    httpd_resp_send(req, string, HTTPD_RESP_USE_STRLEN);
-    cJSON_Delete(configuration_received_json);
-    free(string);
+    httpd_resp_send(req, string_json, HTTPD_RESP_USE_STRLEN);
+    cJSON_Delete(configuration_json);
+    json_validator_delete(&validator);
+    free(string_json);
     return ESP_OK;
 }
 
