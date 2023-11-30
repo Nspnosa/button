@@ -145,7 +145,7 @@ void json_validator_key_is_integer(cJSON_validator_t *v_json, char *key, char *e
 
     //we already know that it is a number, let's check to see if it is an integer
     cJSON *integer = cJSON_GetObjectItemCaseSensitive(v_json->json, key);
-    if (integer->valuedouble != integer->valueint) {
+    if (((double) integer->valueint) != integer->valuedouble) {
         v_json->valid = false;
         if (error == NULL) {
             json_validator_add_error_with_key(v_json, key, ERROR_NOT_INTEGER);
@@ -166,7 +166,7 @@ void json_validator_if_key_exists_is_integer(cJSON_validator_t *v_json, char *ke
         return;
     }
 
-    if (integer->valuedouble != integer->valueint) {
+    if (((double) integer->valueint) != integer->valuedouble) {
         v_json->valid = false;
         if (error == NULL) {
             json_validator_add_error_with_key(v_json, key, ERROR_NOT_INTEGER);
