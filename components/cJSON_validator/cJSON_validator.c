@@ -137,14 +137,25 @@ void json_validator_if_key_exists_is_number(cJSON_validator_t *v_json, char *key
     }
 }
 
-//key is number has to be called first
 void json_validator_key_is_integer(cJSON_validator_t *v_json, char *key, char *error) {
     if (!v_json->valid) {
         return;
     }
 
-    //we already know that it is a number, let's check to see if it is an integer
     cJSON *integer = cJSON_GetObjectItemCaseSensitive(v_json->json, key);
+
+    //is number
+    if (!cJSON_IsNumber(integer)) {
+        v_json->valid = false;
+        if (error == NULL) {
+            json_validator_add_error_with_key(v_json, key, ERROR_NOT_NUMBER);
+        } else {
+            json_validator_add_error(v_json, error);
+        }
+        return;
+    }
+
+    //is integer
     if (((double) integer->valueint) != integer->valuedouble) {
         v_json->valid = false;
         if (error == NULL) {
@@ -160,12 +171,23 @@ void json_validator_if_key_exists_is_integer(cJSON_validator_t *v_json, char *ke
         return;
     }
 
-    //we already know that it is a number, let's check to see if it is an integer
     cJSON *integer = cJSON_GetObjectItemCaseSensitive(v_json->json, key);
     if (integer == NULL) {
         return;
     }
 
+    //is number
+    if (!cJSON_IsNumber(integer)) {
+        v_json->valid = false;
+        if (error == NULL) {
+            json_validator_add_error_with_key(v_json, key, ERROR_NOT_NUMBER);
+        } else {
+            json_validator_add_error(v_json, error);
+        }
+        return;
+    }
+
+    //is integer
     if (((double) integer->valueint) != integer->valuedouble) {
         v_json->valid = false;
         if (error == NULL) {
@@ -176,13 +198,36 @@ void json_validator_if_key_exists_is_integer(cJSON_validator_t *v_json, char *ke
     }
 }
 
-//key is integer has to be called first
 void json_validator_key_is_integer_between(cJSON_validator_t *v_json, char *key, int bottom_limit, int top_limit, char *error) {
     if (!v_json->valid) {
         return;
     }
 
     cJSON *integer = cJSON_GetObjectItemCaseSensitive(v_json->json, key);
+
+    //is number
+    if (!cJSON_IsNumber(integer)) {
+        v_json->valid = false;
+        if (error == NULL) {
+            json_validator_add_error_with_key(v_json, key, ERROR_NOT_NUMBER);
+        } else {
+            json_validator_add_error(v_json, error);
+        }
+        return;
+    }
+
+    //is integer
+    if (((double) integer->valueint) != integer->valuedouble) {
+        v_json->valid = false;
+        if (error == NULL) {
+            json_validator_add_error_with_key(v_json, key, ERROR_NOT_INTEGER);
+        } else {
+            json_validator_add_error(v_json, error);
+        }
+        return;
+    }
+
+    //is between values
     if ((bottom_limit > integer->valueint) || (top_limit < integer->valueint)) {
         v_json->valid = false;
         if (error == NULL) {
@@ -203,6 +248,29 @@ void json_validator_if_key_exists_is_integer_between(cJSON_validator_t *v_json, 
         return;
     }
 
+    //is number
+    if (!cJSON_IsNumber(integer)) {
+        v_json->valid = false;
+        if (error == NULL) {
+            json_validator_add_error_with_key(v_json, key, ERROR_NOT_NUMBER);
+        } else {
+            json_validator_add_error(v_json, error);
+        }
+        return;
+    }
+
+    //is integer
+    if (((double) integer->valueint) != integer->valuedouble) {
+        v_json->valid = false;
+        if (error == NULL) {
+            json_validator_add_error_with_key(v_json, key, ERROR_NOT_INTEGER);
+        } else {
+            json_validator_add_error(v_json, error);
+        }
+        return;
+    }
+
+    //is between values
     if ((bottom_limit > integer->valueint) || (top_limit < integer->valueint)) {
         v_json->valid = false;
         if (error == NULL) {

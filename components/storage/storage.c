@@ -10,8 +10,63 @@
 #define NVS_CONFIGURATION_NAMESPACE "configuration"
 #define NVS_CONFIGURATION_KEY "configuration"
 
+#define NVS_CREDENTIALS_VALID_KEY "credentials_valid"
+#define NVS_CREDENTIALS_SSID_KEY "credentials_ssid"
+#define NVS_CREDENTIALS_PASSWORD_KEY "credentials_password"
+#define NVS_CREDENTIALS_VALID 1
+#define NVS_CREDENTIALS_NOT_VALID 0
+
 void storage_init(void) {
     nvs_flash_init();
+}
+
+void storage_get_credentials(nvs_credentials_t *credentials) {
+    nvs_handle_t nvs_handle;
+    esp_err_t err;
+    size_t length;
+    uint8_t valid;
+
+    err = nvs_open(NVS_CONFIGURATION_NAMESPACE, NVS_READWRITE, &nvs_handle);
+    err = nvs_get_u8(nvs_handle, NVS_CREDENTIALS_VALID_KEY, &valid);
+    
+    if (err == ESP_ERR_NVS_NOT_FOUND) { //first time, we need to store default data
+        nvs_set_u8(nvs_handle, NVS_CREDENTIALS_VALID_KEY, NVS_CREDENTIALS_NOT_VALID);
+        credentials->valid = false;
+        credentials->password = NULL;
+        credentials->ssid = NULL;
+    }
+    else if (err == ESP_OK) {
+        credentials->valid = valid == NVS_CREDENTIALS_VALID ? true : false;
+    }
+    
+    if (credentials->valid) {
+        nvs_get_str(nvs_handle, NVS_CREDENTIALS_SSID_KEY, NULL, &length);
+        credentials->ssid = malloc(length);
+        nvs_get_str(nvs_handle, NVS_CREDENTIALS_SSID_KEY, credentials->ssid, &length);
+
+        nvs_get_str(nvs_handle, NVS_CREDENTIALS_PASSWORD_KEY, NULL, &length);
+        credentials->password = malloc(length);
+        nvs_get_str(nvs_handle, NVS_CREDENTIALS_PASSWORD_KEY, credentials->password, &length);
+        printf("[storage]: ssid: %s password %s\n", credentials->ssid, credentials->password);
+    } 
+    else {
+        printf("[storage]: no valid credentials\n");
+    }
+
+    nvs_close(nvs_handle);
+}
+
+void storage_set_credentials(nvs_credentials_t *credentials) {
+    nvs_handle_t nvs_handle;
+    esp_err_t err;
+    uint8_t valid = credentials->valid ? NVS_CREDENTIALS_VALID : NVS_CREDENTIALS_NOT_VALID;
+    err = nvs_open(NVS_CONFIGURATION_NAMESPACE, NVS_READWRITE, &nvs_handle);
+
+    nvs_set_u8(nvs_handle, NVS_CREDENTIALS_VALID_KEY, valid);
+    nvs_set_str(nvs_handle, NVS_CREDENTIALS_SSID_KEY, credentials->ssid);
+    nvs_set_str(nvs_handle, NVS_CREDENTIALS_PASSWORD_KEY, credentials->password);
+
+    nvs_close(nvs_handle);
 }
 
 void storage_get_configuration(nvs_configuration_t *configuration) {

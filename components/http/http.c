@@ -109,6 +109,8 @@ void wifi_init_softap(void)
 
 esp_err_t configuration_server_configuration_get(httpd_req_t *req);
 esp_err_t configuration_server_configuration_set(httpd_req_t *req);
+esp_err_t configuration_server_credentials_get(httpd_req_t *req);
+esp_err_t configuration_server_credentials_set(httpd_req_t *req);
 esp_err_t configuration_server_actions_get(httpd_req_t *req);
 esp_err_t configuration_server_actions_set(httpd_req_t *req);
 
@@ -144,6 +146,31 @@ httpd_uri_t configuration_server_uri_actions_set = {
     .user_ctx = NULL
 };
 
+//get configured actions
+httpd_uri_t configuration_server_uri_credentials_get = {
+    .uri      = "/configuration/credentials",
+    .method   = HTTP_GET,
+    .handler  = configuration_server_credentials_get,
+    .user_ctx = NULL
+};
+
+//set configured actions
+httpd_uri_t configuration_server_uri_credentials_set = {
+    .uri      = "/configuration/credentials",
+    .method   = HTTP_POST,
+    .handler  = configuration_server_credentials_set,
+    .user_ctx = NULL
+};
+
+esp_err_t configuration_server_credentials_get(httpd_req_t *req) {
+    return ESP_OK;
+}
+
+esp_err_t configuration_server_credentials_set(httpd_req_t *req) {
+    return ESP_OK;
+}
+
+
 esp_err_t configuration_server_configuration_get(httpd_req_t *req) {
     nvs_configuration_t configuration;
     storage_get_configuration(&configuration);
@@ -176,16 +203,8 @@ esp_err_t configuration_server_configuration_set(httpd_req_t *req) {
     json_validator_contains_only_any_of(&validator, array_of_keys, 3, NULL); //verify that the object has only one of these keys
 
     //validate only if key exists since we already know that at least one exits from the previouse check
-    json_validator_if_key_exists_is_number(&validator, "actionDelayMs", NULL);
-    json_validator_if_key_exists_is_integer(&validator, "actionDelayMs", NULL);
     json_validator_if_key_exists_is_integer_between(&validator, "actionDelayMs", 100, 2000, NULL);
-
-    json_validator_if_key_exists_is_number(&validator, "debounceMs", NULL);
-    json_validator_if_key_exists_is_integer(&validator, "debounceMs", NULL);
     json_validator_if_key_exists_is_integer_between(&validator, "debounceMs", 0, 200, NULL);
-
-    json_validator_if_key_exists_is_number(&validator, "longPressMs", NULL);
-    json_validator_if_key_exists_is_integer(&validator, "longPressMs", NULL);
     json_validator_if_key_exists_is_integer_between(&validator, "longPressMs", 200, 500, NULL);
 
     if (!validator.valid) { //not valid return error
