@@ -33,8 +33,17 @@ void start_server(void *arg) {
 void app_main() {
     storage_init();
     nvs_configuration_t configuration;
+    nvs_credentials_t credentials;
     storage_get_configuration(&configuration);
     printf("[main]: data read debounce_ms: %i, long_press_ms: %i, action_delay_ms %i\n", configuration.debounce_ms, configuration.long_press_ms, configuration.action_delay_ms);
+
+    storage_get_credentials(&credentials);
+    if (credentials.valid) {
+        printf("[main]: credentials stored ssid: [%s] password: [%s]\n", credentials.ssid, credentials.password);
+    } else {
+        printf("[main]: no valid credentials stored\n");
+    }
+
 
     button_t my_button;
     power_button_t my_power_button;

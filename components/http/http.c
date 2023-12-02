@@ -163,13 +163,82 @@ httpd_uri_t configuration_server_uri_credentials_set = {
 };
 
 esp_err_t configuration_server_credentials_get(httpd_req_t *req) {
+    nvs_credentials_t credentials;
+    storage_get_credentials(&credentials);
+
+    cJSON *credentials_json = cJSON_CreateObject();
+    cJSON *ssid = credentials.valid ? cJSON_CreateString(credentials.ssid) : cJSON_CreateNull();
+    cJSON *password = credentials.valid ? cJSON_CreateString(credentials.password) : cJSON_CreateNull();
+    cJSON_AddItemToObject(credentials_json, "ssid", ssid);
+    cJSON_AddItemToObject(credentials_json, "password", password);
+    char *string = cJSON_Print(credentials_json);
+
+    httpd_resp_send(req, (const char *) string, HTTPD_RESP_USE_STRLEN);
+
+    //free memory
+    cJSON_Delete(credentials_json);
+    free(string);
+    free(credentials.ssid);
+    free(credentials.password);
     return ESP_OK;
 }
 
 esp_err_t configuration_server_credentials_set(httpd_req_t *req) {
+    char content[100];
+    int ret = httpd_req_recv(req, content, 100);
+    cJSON_validator_t validator;
+
+    json_validator_init(content, &validator, NULL);
+    json_validator_object_not_empty(&validator, NULL);
+    char *array_of_keys[] = {"ssid", "password"};
+    json_validator_contains_only(&validator, array_of_keys, 2, NULL); //verify that the object has only one of these keys
+
+    //validate only if key exists since we already know that at least one exits from the previouse check
+    json_validator_key_is_string_with_size_between(&validator, "ssid", 2, 32, "ssid field has to be a string between 2 and 32 characters long");
+    json_validator_key_is_string_with_size_between(&validator, "password", 0, 64, "password field has to be an empty string or have between 8 and 64 characters long");
+
+    if (!validator.valid) { //not valid return error
+        cJSON *error = cJSON_CreateObject();
+        cJSON_AddStringToObject(error, "error", validator.error_message);
+        char *error_string = cJSON_Print(error);
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, error_string);
+
+        json_validator_delete(&validator);
+        cJSON_Delete(error);
+        free(error_string);
+        return ESP_OK;
+    }
+
+    //now we need to store the json
+    nvs_configuration_t configuration;
+    storage_get_configuration(&configuration);
+
+    cJSON *password = cJSON_GetObjectItemCaseSensitive(validator.json, "password");
+    if (strlen(password->string) < 8) {
+        cJSON *error = cJSON_CreateObject();
+        cJSON_AddStringToObject(error, "error", "password field needs to contain at least 8 characters");
+        char *error_string = cJSON_Print(error);
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, error_string);
+
+        json_validator_delete(&validator);
+        cJSON_Delete(error);
+        cJSON_Delete(password);
+        free(error_string);
+        return ESP_OK;
+    }
+    cJSON *ssid = cJSON_GetObjectItemCaseSensitive(validator.json, "ssid");
+
+    //TODO: credentials should only be stored if connection to ap is successful
+    nvs_credentials_t credentials = {
+        .valid = true,
+        .ssid = ssid->string,
+        .password = password->string,
+    };
+
+    storage_set_credentials(&credentials);
+    httpd_resp_send(req, NULL, 0);
     return ESP_OK;
 }
-
 
 esp_err_t configuration_server_configuration_get(httpd_req_t *req) {
     nvs_configuration_t configuration;
