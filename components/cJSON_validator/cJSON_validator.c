@@ -17,6 +17,7 @@ hopefully I'll be able to come up with something prettier and more performant.*/
 #define ERROR_STRING_INVALID_RANGE "Provided key \"\" is not a string of size between expected values"
 #define ERROR_KEY_NOT_PRESENT "Provided object does not have expected key \"\""
 #define ERROR_KEY_EXTRA_PRESENT "Provided object has unexpected key \"\""
+#define ERROR_NOT_NULL "Provided key is not null \"\""
 
 char* insert_between_quotes(const char *original_string, const char *insert_string) {
     // Find the position of the first set of double quotes
@@ -291,7 +292,7 @@ void json_validator_key_is_string(cJSON_validator_t *v_json, char *key, char *er
     if (!cJSON_IsString(string)) {
         v_json->valid = false;
         if (error == NULL) {
-            json_validator_add_error(v_json, ERROR_NOT_STRING);
+            json_validator_add_error_with_key(v_json, ERROR_NOT_STRING, key);
         } else {
             json_validator_add_error(v_json, error);
         }
@@ -306,10 +307,38 @@ void json_validator_key_is_string_with_size_between(cJSON_validator_t *v_json, c
     cJSON *string = cJSON_GetObjectItemCaseSensitive(v_json->json, key);
     unsigned int string_size = strlen(string->valuestring);
 
+    if (!cJSON_IsString(string)) {
+        v_json->valid = false;
+        if (error == NULL) {
+            json_validator_add_error_with_key(v_json, ERROR_NOT_STRING, key);
+        } else {
+            json_validator_add_error(v_json, error);
+        }
+        return;
+    }
+
     if ((string_size < min_size) || (string_size > max_size)) {
         v_json->valid = false;
         if (error == NULL) {
-            json_validator_add_error(v_json, ERROR_STRING_INVALID_RANGE);
+            json_validator_add_error_with_key(v_json, ERROR_STRING_INVALID_RANGE, key);
+        } else {
+            json_validator_add_error(v_json, error);
+        }
+    }
+}
+
+void json_validator_key_is_null(cJSON_validator_t *v_json, char *key, char *error) {
+    if (!v_json->valid) {
+        return;
+    }
+
+    cJSON *null = cJSON_GetObjectItemCaseSensitive(v_json->json, key);
+    unsigned int string_size = strlen(null->valuestring);
+
+    if (!cJSON_IsNull(null)) {
+        v_json->valid = false;
+        if (error == NULL) {
+            json_validator_add_error_with_key(v_json, ERROR_NOT_NULL, key);
         } else {
             json_validator_add_error(v_json, error);
         }
