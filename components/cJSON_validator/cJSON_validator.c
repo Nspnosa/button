@@ -305,7 +305,6 @@ void json_validator_key_is_string_with_size_between(cJSON_validator_t *v_json, c
     }
 
     cJSON *string = cJSON_GetObjectItemCaseSensitive(v_json->json, key);
-    unsigned int string_size = strlen(string->valuestring);
 
     if (!cJSON_IsString(string)) {
         v_json->valid = false;
@@ -317,6 +316,7 @@ void json_validator_key_is_string_with_size_between(cJSON_validator_t *v_json, c
         return;
     }
 
+    unsigned int string_size = strlen(string->valuestring);
     if ((string_size < min_size) || (string_size > max_size)) {
         v_json->valid = false;
         if (error == NULL) {

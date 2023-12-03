@@ -111,8 +111,12 @@ esp_err_t configuration_server_configuration_get(httpd_req_t *req);
 esp_err_t configuration_server_configuration_set(httpd_req_t *req);
 esp_err_t configuration_server_credentials_get(httpd_req_t *req);
 esp_err_t configuration_server_credentials_set(httpd_req_t *req);
+esp_err_t configuration_server_credentials_delete(httpd_req_t *req);
 esp_err_t configuration_server_actions_get(httpd_req_t *req);
 esp_err_t configuration_server_actions_set(httpd_req_t *req);
+
+esp_err_t configuration_server_ap_get(httpd_req_t *req);
+esp_err_t configuration_server_ap_connection_result_get(httpd_req_t *req);
 
 //get configuration
 httpd_uri_t configuration_server_uri_configuration_get = {
@@ -146,7 +150,7 @@ httpd_uri_t configuration_server_uri_actions_set = {
     .user_ctx = NULL
 };
 
-//get configured actions
+//get configured credentials 
 httpd_uri_t configuration_server_uri_credentials_get = {
     .uri      = "/configuration/credentials",
     .method   = HTTP_GET,
@@ -154,13 +158,43 @@ httpd_uri_t configuration_server_uri_credentials_get = {
     .user_ctx = NULL
 };
 
-//set configured actions
+//get configured credentials 
 httpd_uri_t configuration_server_uri_credentials_set = {
     .uri      = "/configuration/credentials",
     .method   = HTTP_POST,
     .handler  = configuration_server_credentials_set,
     .user_ctx = NULL
 };
+
+//delete configured credentials 
+httpd_uri_t configuration_server_uri_credentials_delete = {
+    .uri      = "/configuration/credentials",
+    .method   = HTTP_DELETE,
+    .handler  = configuration_server_credentials_delete,
+    .user_ctx = NULL
+};
+
+httpd_uri_t configuration_server_uri_ap_get = {
+    .uri      = "/configuration/ap",
+    .method   = HTTP_GET,
+    .handler  = configuration_server_ap_get,
+    .user_ctx = NULL
+};
+
+httpd_uri_t configuration_server_uri_ap_connection_result_get = {
+    .uri      = "/configuration/connection",
+    .method   = HTTP_GET,
+    .handler  = configuration_server_ap_connection_result_get,
+    .user_ctx = NULL
+};
+
+esp_err_t configuration_server_credentials_delete(httpd_req_t *req) {
+    nvs_credentials_t credentials;
+    credentials.valid = false;
+    storage_set_credentials(&credentials);
+    httpd_resp_send(req, NULL, 0);
+    return ESP_OK;
+}
 
 esp_err_t configuration_server_credentials_get(httpd_req_t *req) {
     nvs_credentials_t credentials;
@@ -181,6 +215,55 @@ esp_err_t configuration_server_credentials_get(httpd_req_t *req) {
     free(credentials.ssid);
     free(credentials.password);
     return ESP_OK;
+}
+
+char ** fake_access_point_scan(uint8_t *elements) {
+    *elements = 4;
+    char **result = malloc(sizeof(char *) * (*elements));
+    for (uint8_t i = 0; i < *elements; i++) {
+        result[i] = malloc((sizeof("SSID ID ")) + 3);
+        sprintf(result[i], "SSID ID %u", i);
+    }
+    return result;
+}
+
+esp_err_t configuration_server_ap_get(httpd_req_t *req) {
+
+    uint8_t count;
+    char **result = fake_access_point_scan(&count);
+    cJSON *ssid_object = cJSON_CreateObject();
+    cJSON *ssid_list = cJSON_CreateStringArray(result, count);
+    cJSON_AddItemToObject(ssid_object, "ssidList", ssid_list);
+    char *string = cJSON_Print(ssid_object);
+
+    httpd_resp_send(req, string, HTTPD_RESP_USE_STRLEN);
+
+    //free ssid results
+    for (uint8_t i = 0; i < count; i++) {
+        free(result[i]);
+    }
+    free(result);
+
+    cJSON_Delete(ssid_object);
+    free(string);
+    return ESP_OK;    
+}
+
+bool fake_connection_failed_or_succeded(void) {
+    return true;
+}
+
+esp_err_t configuration_server_ap_connection_result_get(httpd_req_t *req) {
+    bool connected = fake_connection_failed_or_succeded();
+    cJSON *response = cJSON_CreateObject();
+    cJSON_AddBoolToObject(response, "connectionSuccessful", connected);
+    char *string = cJSON_Print(response);
+
+    httpd_resp_send(req, string, HTTPD_RESP_USE_STRLEN);
+
+    cJSON_Delete(response);
+    free(string);
+    return ESP_OK;    
 }
 
 esp_err_t configuration_server_credentials_set(httpd_req_t *req) {
@@ -209,12 +292,8 @@ esp_err_t configuration_server_credentials_set(httpd_req_t *req) {
         return ESP_OK;
     }
 
-    //now we need to store the json
-    nvs_configuration_t configuration;
-    storage_get_configuration(&configuration);
-
     cJSON *password = cJSON_GetObjectItemCaseSensitive(validator.json, "password");
-    if (strlen(password->string) < 8) {
+    if (strlen(password->valuestring) < 8) {
         cJSON *error = cJSON_CreateObject();
         cJSON_AddStringToObject(error, "error", "password field needs to contain at least 8 characters");
         char *error_string = cJSON_Print(error);
@@ -222,7 +301,6 @@ esp_err_t configuration_server_credentials_set(httpd_req_t *req) {
 
         json_validator_delete(&validator);
         cJSON_Delete(error);
-        cJSON_Delete(password);
         free(error_string);
         return ESP_OK;
     }
@@ -347,6 +425,7 @@ void configuration_server_start(void) {
     wifi_init_softap();
 
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
+    config.max_uri_handlers = 15;
     httpd_handle_t server = NULL;
 
     if (httpd_start(&server, &config) == ESP_OK) {
@@ -354,5 +433,10 @@ void configuration_server_start(void) {
         httpd_register_uri_handler(server, &configuration_server_uri_configuration_set);
         httpd_register_uri_handler(server, &configuration_server_uri_actions_get);
         httpd_register_uri_handler(server, &configuration_server_uri_actions_set);
+        httpd_register_uri_handler(server, &configuration_server_uri_credentials_set);
+        httpd_register_uri_handler(server, &configuration_server_uri_credentials_get);
+        httpd_register_uri_handler(server, &configuration_server_uri_credentials_delete);
+        httpd_register_uri_handler(server, &configuration_server_uri_ap_get);
+        httpd_register_uri_handler(server, &configuration_server_uri_ap_connection_result_get);
     }
 }
