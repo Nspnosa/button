@@ -6,13 +6,18 @@
 #include "nvs_flash.h"
 #include "nvs.h"
 #include "include/storage.h"
+#include <string.h>
 
-#define NVS_CONFIGURATION_NAMESPACE "configuration"
-#define NVS_CONFIGURATION_KEY "configuration"
+#define NVS_CONFIGURATION_NAMESPACE "config"
+#define NVS_CONFIGURATION_KEY "config"
 
-#define NVS_CREDENTIALS_VALID_KEY "credentials_valid"
-#define NVS_CREDENTIALS_SSID_KEY "credentials_ssid"
-#define NVS_CREDENTIALS_PASSWORD_KEY "credentials_password"
+#define NVS_CREDENTIALS_VALID_KEY "cred_valid"
+#define NVS_CREDENTIALS_SSID_KEY "cred_ssid"
+#define NVS_CREDENTIALS_PASSWORD_KEY "cred_pass"
+
+#define NVS_AP_CREDENTIALS_PASSWORD_KEY "ap_cred_pass"
+#define NVS_AP_CREDENTIALS_SSID_KEY "ap_cred_ssid"
+
 #define NVS_CREDENTIALS_VALID 1
 #define NVS_CREDENTIALS_NOT_VALID 0
 
@@ -31,6 +36,7 @@ void storage_get_credentials(nvs_credentials_t *credentials) {
     
     if (err == ESP_ERR_NVS_NOT_FOUND) { //first time, we need to store default data
         nvs_set_u8(nvs_handle, NVS_CREDENTIALS_VALID_KEY, NVS_CREDENTIALS_NOT_VALID);
+        nvs_commit(nvs_handle);
         credentials->valid = false;
         credentials->password = NULL;
         credentials->ssid = NULL;
@@ -52,7 +58,6 @@ void storage_get_credentials(nvs_credentials_t *credentials) {
     else {
         printf("[storage]: no valid credentials\n");
     }
-
     nvs_close(nvs_handle);
 }
 
@@ -87,6 +92,7 @@ void storage_get_configuration(nvs_configuration_t *configuration) {
         printf("[storage]: no data yet, storing default\n");
         nvs_set_blob(nvs_handle, NVS_CONFIGURATION_KEY, &default_configuration, sizeof(nvs_configuration_t));
         nvs_get_blob(nvs_handle, NVS_CONFIGURATION_KEY, configuration, &length);
+        nvs_commit(nvs_handle);
     }
 
     nvs_close(nvs_handle);
@@ -97,5 +103,43 @@ void storage_set_configuration(nvs_configuration_t *configuration) {
     esp_err_t err;
     err = nvs_open(NVS_CONFIGURATION_NAMESPACE, NVS_READWRITE, &nvs_handle);
     nvs_set_blob(nvs_handle, NVS_CONFIGURATION_KEY, configuration, sizeof(nvs_configuration_t));
+    nvs_commit(nvs_handle);
     nvs_close(nvs_handle);
+}
+
+void storage_set_ap_credentials(nvs_ap_credentials_t *ap_credentials) {
+    nvs_handle_t nvs_handle;
+    nvs_open(NVS_CONFIGURATION_NAMESPACE, NVS_READWRITE, &nvs_handle);
+    nvs_set_str(nvs_handle, NVS_AP_CREDENTIALS_SSID_KEY, ap_credentials->ssid);
+    nvs_set_str(nvs_handle, NVS_AP_CREDENTIALS_PASSWORD_KEY, ap_credentials->password);
+    nvs_commit(nvs_handle);
+    nvs_close(nvs_handle);
+}
+
+void storage_get_ap_credentials(nvs_ap_credentials_t *ap_credentials) {
+    nvs_handle_t nvs_handle;
+    esp_err_t err;
+    size_t length;
+
+    err = nvs_open(NVS_CONFIGURATION_NAMESPACE, NVS_READWRITE, &nvs_handle);
+    err = nvs_get_str(nvs_handle, NVS_AP_CREDENTIALS_SSID_KEY, NULL, &length);
+
+    if (err == ESP_ERR_NVS_NOT_FOUND) { //first time, we need to store default data
+        nvs_ap_credentials_t default_ap_credentials;
+        default_ap_credentials.ssid = malloc(strlen("powerbutton-ap") + 1);
+        default_ap_credentials.password = malloc(strlen("12345678") + 1);
+        storage_set_ap_credentials(&default_ap_credentials);
+
+        //copy data and return it
+        ap_credentials->ssid = default_ap_credentials.ssid;
+        ap_credentials->password = default_ap_credentials.password;
+        return;
+    }
+
+    char *ssid = malloc(length);
+    nvs_get_str(nvs_handle, NVS_AP_CREDENTIALS_SSID_KEY, ssid, &length);
+
+    nvs_get_str(nvs_handle, NVS_AP_CREDENTIALS_PASSWORD_KEY, NULL, &length);
+    char *password = malloc(length);
+    nvs_get_str(nvs_handle, NVS_AP_CREDENTIALS_PASSWORD_KEY, password, &length);
 }

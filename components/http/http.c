@@ -106,7 +106,6 @@ void wifi_init_softap(void)
              EXAMPLE_ESP_WIFI_SSID, EXAMPLE_ESP_WIFI_PASS, EXAMPLE_ESP_WIFI_CHANNEL);
 }
 
-
 esp_err_t configuration_server_configuration_get(httpd_req_t *req);
 esp_err_t configuration_server_configuration_set(httpd_req_t *req);
 esp_err_t configuration_server_credentials_get(httpd_req_t *req);
@@ -114,7 +113,13 @@ esp_err_t configuration_server_credentials_set(httpd_req_t *req);
 esp_err_t configuration_server_credentials_delete(httpd_req_t *req);
 esp_err_t configuration_server_actions_get(httpd_req_t *req);
 esp_err_t configuration_server_actions_set(httpd_req_t *req);
+esp_err_t configuration_server_actions_delete(httpd_req_t *req);
 
+//server access point credentials
+esp_err_t configuration_server_server_credentials_get(httpd_req_t *req);
+esp_err_t configuration_server_server_credentials_set(httpd_req_t *req);
+
+//wifi connection
 esp_err_t configuration_server_ap_get(httpd_req_t *req);
 esp_err_t configuration_server_ap_connection_result_get(httpd_req_t *req);
 
@@ -147,6 +152,14 @@ httpd_uri_t configuration_server_uri_actions_set = {
     .uri      = "/configuration/actions",
     .method   = HTTP_POST,
     .handler  = configuration_server_actions_set,
+    .user_ctx = NULL
+};
+
+//delete configured actions
+httpd_uri_t configuration_server_uri_actions_delete = {
+    .uri      = "/configuration/actions",
+    .method   = HTTP_DELETE,
+    .handler  = configuration_server_actions_delete,
     .user_ctx = NULL
 };
 
@@ -185,6 +198,20 @@ httpd_uri_t configuration_server_uri_ap_connection_result_get = {
     .uri      = "/configuration/connection",
     .method   = HTTP_GET,
     .handler  = configuration_server_ap_connection_result_get,
+    .user_ctx = NULL
+};
+
+httpd_uri_t configuration_server_uri_server_credentials_get = {
+    .uri      = "/configuration/servercredentials",
+    .method   = HTTP_GET,
+    .handler  = configuration_server_server_credentials_get,
+    .user_ctx = NULL
+};
+
+httpd_uri_t configuration_server_uri_server_credentials_set = {
+    .uri      = "/configuration/servercredentials",
+    .method   = HTTP_POST,
+    .handler  = configuration_server_server_credentials_set,
     .user_ctx = NULL
 };
 
@@ -309,11 +336,14 @@ esp_err_t configuration_server_credentials_set(httpd_req_t *req) {
     //TODO: credentials should only be stored if connection to ap is successful
     nvs_credentials_t credentials = {
         .valid = true,
-        .ssid = ssid->string,
-        .password = password->string,
+        .ssid = ssid->valuestring,
+        .password = password->valuestring,
     };
 
     storage_set_credentials(&credentials);
+    //TODO: get credentials read and return them to the user
+
+    json_validator_delete(&validator);
     httpd_resp_send(req, NULL, 0);
     return ESP_OK;
 }
@@ -419,6 +449,77 @@ esp_err_t configuration_server_actions_set(httpd_req_t *req) {
     return ESP_OK;
 }
 
+esp_err_t configuration_server_actions_delete(httpd_req_t *req) {
+    //if data valid should store data in nvs
+    // httpd_resp_send(req, (const char *)styles_css_start, styles_css_end - styles_css_start - 1);
+    return ESP_OK;
+}
+
+//TODO: allow users to factory reset to return these values to their original state
+
+esp_err_t configuration_server_server_credentials_get(httpd_req_t *req) {
+    nvs_ap_credentials_t ap_credentials;
+    storage_set_ap_credentials(&ap_credentials);
+
+    cJSON *ap_credentials_json = cJSON_CreateObject();
+    cJSON *ssid = cJSON_CreateString(ap_credentials.ssid);
+    cJSON *password = cJSON_CreateString(ap_credentials.password);
+    cJSON_AddItemToObject(ap_credentials_json, "ssid", ssid);
+    cJSON_AddItemToObject(ap_credentials_json, "password", password);
+    char *string = cJSON_Print(ap_credentials_json);
+
+    httpd_resp_send(req, (const char *) string, HTTPD_RESP_USE_STRLEN);
+
+    //free memory
+    cJSON_Delete(ap_credentials_json);
+    free(string);
+    free(ap_credentials.ssid);
+    free(ap_credentials.password);
+    return ESP_OK;
+}
+
+esp_err_t configuration_server_server_credentials_set(httpd_req_t *req) {
+    char content[100];
+    int ret = httpd_req_recv(req, content, 100);
+    cJSON_validator_t validator;
+
+    json_validator_init(content, &validator, NULL);
+    json_validator_object_not_empty(&validator, NULL);
+    char *array_of_keys[] = {"ssid", "password"};
+    json_validator_contains_only(&validator, array_of_keys, 2, NULL); //verify that the object has only one of these keys
+
+    //validate only if key exists since we already know that at least one exits from the previouse check
+    json_validator_key_is_string_with_size_between(&validator, "ssid", 2, 32, "ssid field has to be a string between 2 and 32 characters long");
+    json_validator_key_is_string_with_size_between(&validator, "password", 8, 64, "password field has to be a string between 8 and 64 characters long");
+
+    if (!validator.valid) { //not valid return error
+        cJSON *error = cJSON_CreateObject();
+        cJSON_AddStringToObject(error, "error", validator.error_message);
+        char *error_string = cJSON_Print(error);
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, error_string);
+
+        json_validator_delete(&validator);
+        cJSON_Delete(error);
+        free(error_string);
+        return ESP_OK;
+    }
+
+    cJSON *password = cJSON_GetObjectItemCaseSensitive(validator.json, "password");
+    cJSON *ssid = cJSON_GetObjectItemCaseSensitive(validator.json, "ssid");
+
+    nvs_ap_credentials_t ap_credentials = {
+        .ssid = ssid->valuestring,
+        .password = password->valuestring,
+    };
+
+    storage_set_ap_credentials(&ap_credentials);
+
+    //TODO: get credentials read and return them to the user
+    json_validator_delete(&validator);
+    httpd_resp_send(req, NULL, 0);
+    return ESP_OK;
+}
+
 void configuration_server_start(void) {
 
     // nvs_flash_init();
@@ -438,5 +539,9 @@ void configuration_server_start(void) {
         httpd_register_uri_handler(server, &configuration_server_uri_credentials_delete);
         httpd_register_uri_handler(server, &configuration_server_uri_ap_get);
         httpd_register_uri_handler(server, &configuration_server_uri_ap_connection_result_get);
+        httpd_register_uri_handler(server, &configuration_server_uri_server_credentials_get);
+        httpd_register_uri_handler(server, &configuration_server_uri_server_credentials_set);
     }
 }
+
+//TODO: fix bugs in configuration_server_server_credentials_set & configuration_server_credentials_set
