@@ -22,4 +22,6 @@ void json_validator_contains(cJSON_validator_t *v_json, char *keys[], size_t key
 void json_validator_contains_only(cJSON_validator_t *v_json, char *keys[], size_t key_count, char *error);
 void json_validator_contains_any_of(cJSON_validator_t *v_json, char *keys[], size_t key_count, char *error);
 void json_validator_contains_only_any_of(cJSON_validator_t *v_json, char *keys[], size_t key_count, char *error);
+void json_validator_key_is_bool(cJSON_validator_t *v_json, char *key, char *error);
+void json_validator_key_is_array(cJSON_validator_t *v_json, char *key, char *error);
 void json_validator_delete(cJSON_validator_t *v_json);

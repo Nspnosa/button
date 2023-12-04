@@ -13,6 +13,8 @@ hopefully I'll be able to come up with something prettier and more performant.*/
 #define ERROR_NOT_NUMBER "Provided key \"\" is not a number"
 #define ERROR_NOT_INTEGER "Provided key \"\" is not an integer"
 #define ERROR_NOT_STRING "Provided key \"\" is not a string"
+#define ERROR_NOT_BOOL "Provided key \"\" is not a bool"
+#define ERROR_NOT_ARRAY "Provided key \"\" is not an array"
 #define ERROR_INTEGER_INVALID_RANGE "Provided key \"\" is not an integer between expected values"
 #define ERROR_STRING_INVALID_RANGE "Provided key \"\" is not a string of size between expected values"
 #define ERROR_KEY_NOT_PRESENT "Provided object does not have expected key \"\""
@@ -466,6 +468,43 @@ void json_validator_contains_only_any_of(cJSON_validator_t *v_json, char *keys[]
     }
 
     cJSON_Delete(json_cpy);
+}
+
+
+void json_validator_key_is_bool(cJSON_validator_t *v_json, char *key, char *error) {
+    bool any = false;
+    if (!v_json->valid) {
+        return;
+    }
+
+    cJSON *boolean = cJSON_GetObjectItemCaseSensitive(v_json->json, key);
+
+    if (!cJSON_IsBool(boolean)) {
+        v_json->valid = false;
+        if (error == NULL) {
+            json_validator_add_error_with_key(v_json, ERROR_NOT_BOOL, key);
+        } else {
+            json_validator_add_error(v_json, error);
+        }
+    }
+}
+
+void json_validator_key_is_array(cJSON_validator_t *v_json, char *key, char *error) {
+    bool any = false;
+    if (!v_json->valid) {
+        return;
+    }
+
+    cJSON *boolean = cJSON_GetObjectItemCaseSensitive(v_json->json, key);
+
+    if (!cJSON_IsArray(boolean)) {
+        v_json->valid = false;
+        if (error == NULL) {
+            json_validator_add_error_with_key(v_json, ERROR_NOT_ARRAY, key);
+        } else {
+            json_validator_add_error(v_json, error);
+        }
+    }
 }
 
 void json_validator_delete(cJSON_validator_t *v_json) {
