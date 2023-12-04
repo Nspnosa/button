@@ -43,7 +43,6 @@ void app_main() {
         printf("[main]: no valid credentials stored\n");
     }
 
-
     button_t my_button;
     power_button_t my_power_button;
     power_button_press_t my_press_pattern[3] = {PRESS, PRESS, PRESS};

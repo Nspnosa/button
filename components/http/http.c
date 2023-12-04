@@ -439,19 +439,22 @@ void configuration_server_actions_response(httpd_req_t *req, uint8_t id) {
             cJSON_AddStringToObject(script_json, "script", "");
             cJSON_AddItemToObject(script_json, "pattern", pattern_array_json);
             cJSON_AddNumberToObject(script_json, "pattern_size", 0);
+            cJSON_AddBoolToObject(script_json, "valid", false);
     } else {
         //else return anything found in nvs
+
+        cJSON_AddNumberToObject(script_json, "scriptID", id);
+        cJSON_AddBoolToObject(script_json, "valid", script.valid);
         cJSON_AddStringToObject(script_json, "name", script.name);
         cJSON_AddStringToObject(script_json, "script", script.script);
 
         for (int i = 0; i < script.pattern_size; i++) {
-            char *press_type = script.pattern == PRESS ? "PRESS" : "LONG_PRESS";
+            char *press_type = script.pattern[i] == PRESS ? "PRESS" : "LONG_PRESS";
             cJSON *press_type_json = cJSON_CreateString(press_type);
             cJSON_AddItemToArray(pattern_array_json, press_type_json);
         }
 
         cJSON_AddItemToObject(script_json, "pattern", pattern_array_json);
-        cJSON_AddNumberToObject(script_json, "pattern_size", script.pattern_size);
     }
 
     //this means there is data available
@@ -459,6 +462,9 @@ void configuration_server_actions_response(httpd_req_t *req, uint8_t id) {
 
     httpd_resp_send(req, string, HTTPD_RESP_USE_STRLEN);
 
+    free(script.name);
+    free(script.script);
+    free(script.pattern);
     cJSON_Delete(script_json);
     free(string);
 }
@@ -469,7 +475,9 @@ esp_err_t configuration_server_actions_get(httpd_req_t *req) {
 
     //verify size, should be 
     uint8_t expected_size = sizeof("/configuration/actions/1") - 1;
-    uint8_t id = atoi(&(req->uri[expected_size - 2]));
+    printf("expected size %u", expected_size);
+    uint8_t id = atoi(&(req->uri[expected_size - 1]));
+    printf("id %u", id);
 
     if ((expected_size != strlen(req->uri)) || ((id < 1) || (id > 5))) {
         cJSON *error = cJSON_CreateObject();
@@ -504,7 +512,7 @@ esp_err_t configuration_server_actions_set(httpd_req_t *req) {
     json_validator_init(content, &validator, NULL);
     json_validator_object_not_empty(&validator, NULL);
     char *array_of_keys[] = {"valid", "name", "script", "pattern", "scriptID"};
-    json_validator_contains_only(&validator, array_of_keys, 4, NULL); //verify that the object has only one of these keys
+    json_validator_contains_only(&validator, array_of_keys, 5, NULL); //verify that the object has only one of these keys
 
     //validate only if key exists since we already know that at least one exits from the previouse check
     json_validator_key_is_bool(&validator, "valid", NULL);
@@ -565,17 +573,27 @@ esp_err_t configuration_server_actions_set(httpd_req_t *req) {
     cJSON *valid = cJSON_GetObjectItemCaseSensitive(validator.json, "valid");
     cJSON *name = cJSON_GetObjectItemCaseSensitive(validator.json, "name");
     cJSON *script = cJSON_GetObjectItemCaseSensitive(validator.json, "script");
-    cJSON *script_id = cJSON_GetObjectItemCaseSensitive(validator.json, "script_id");
+    cJSON *script_id = cJSON_GetObjectItemCaseSensitive(validator.json, "scriptID");
 
-    nvs_script_t nvs_script = {
-        .name = name->valuestring,
-        .script = script->valuestring,
-        .valid = cJSON_IsTrue(valid),
-        .pattern = pattern,
-        .pattern_size = pattern_size
-    };
+    //TODO: this needs to be reverted to its original, more performant form
+    nvs_script_t nvs_script;
+
+    nvs_script.valid = cJSON_IsTrue(valid);
+    nvs_script.pattern_size = pattern_size;
+
+    nvs_script.pattern = malloc(sizeof(power_button_press_t) * pattern_size);
+    nvs_script.name = malloc(strlen(name->valuestring) + 1);
+    nvs_script.script = malloc(strlen(script->valuestring) + 1);
+
+    memcpy(nvs_script.pattern, pattern, sizeof(power_button_press_t) * pattern_size);
+    strcpy(nvs_script.name, name->valuestring);
+    strcpy(nvs_script.script, script->valuestring);
 
     storage_set_script(&nvs_script, script_id->valueint);
+
+    free(nvs_script.pattern);
+    free(nvs_script.name);
+    free(nvs_script.script);
     //saved, read from nvs and return it
 
     configuration_server_actions_response(req, script_id->valueint);
@@ -659,6 +677,7 @@ void configuration_server_start(void) {
 
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.max_uri_handlers = 15;
+    config.uri_match_fn = httpd_uri_match_wildcard;
     httpd_handle_t server = NULL;
 
     if (httpd_start(&server, &config) == ESP_OK) {

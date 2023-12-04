@@ -395,7 +395,7 @@ void json_validator_contains_only(cJSON_validator_t *v_json, char *keys[], size_
         if (json_cpy->child != NULL) {
             v_json->valid = false;
             if (error == NULL) {
-                json_validator_add_error_with_key(v_json, v_json->json->string, ERROR_KEY_EXTRA_PRESENT);
+                json_validator_add_error_with_key(v_json, json_cpy->child->string, ERROR_KEY_EXTRA_PRESENT);
             } else {
                 json_validator_add_error(v_json, error);
             }
@@ -470,7 +470,6 @@ void json_validator_contains_only_any_of(cJSON_validator_t *v_json, char *keys[]
     cJSON_Delete(json_cpy);
 }
 
-
 void json_validator_key_is_bool(cJSON_validator_t *v_json, char *key, char *error) {
     bool any = false;
     if (!v_json->valid) {
@@ -482,7 +481,7 @@ void json_validator_key_is_bool(cJSON_validator_t *v_json, char *key, char *erro
     if (!cJSON_IsBool(boolean)) {
         v_json->valid = false;
         if (error == NULL) {
-            json_validator_add_error_with_key(v_json, ERROR_NOT_BOOL, key);
+            json_validator_add_error_with_key(v_json, key, ERROR_NOT_BOOL);
         } else {
             json_validator_add_error(v_json, error);
         }
@@ -500,7 +499,7 @@ void json_validator_key_is_array(cJSON_validator_t *v_json, char *key, char *err
     if (!cJSON_IsArray(boolean)) {
         v_json->valid = false;
         if (error == NULL) {
-            json_validator_add_error_with_key(v_json, ERROR_NOT_ARRAY, key);
+            json_validator_add_error_with_key(v_json, key, ERROR_NOT_ARRAY);
         } else {
             json_validator_add_error(v_json, error);
         }

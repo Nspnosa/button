@@ -170,6 +170,14 @@ void storage_get_script(nvs_script_t *script, uint8_t script_id) {
     if (err == ESP_ERR_NVS_NOT_FOUND) {
         //nvs not found
         nvs_set_u8(nvs_handle, string, 0);
+
+        sprintf(string, "%s%i", NVS_SCRIPT_NAME_KEY, script_id);
+        nvs_set_str(nvs_handle, string, "");
+        sprintf(string, "%s%i", NVS_SCRIPT_KEY, script_id);
+        nvs_set_str(nvs_handle, string, "");
+        sprintf(string, "%s%i", NVS_SCRIPT_PATTERN_KEY, script_id);
+        power_button_press_t pattern_array[1];
+        nvs_set_blob(nvs_handle, string, pattern_array, sizeof(power_button_press_t) * 0);
         nvs_commit(nvs_handle);
         nvs_close(nvs_handle);
         return;
@@ -190,7 +198,12 @@ void storage_get_script(nvs_script_t *script, uint8_t script_id) {
     sprintf(string, "%s%i", NVS_SCRIPT_PATTERN_KEY, script_id);
     nvs_get_blob(nvs_handle, string, NULL, &length);
     script->pattern = malloc(length);
-    nvs_get_blob(nvs_handle, string, script->pattern, &length);
+    uint8_t pattern_bytes[length];
+    nvs_get_blob(nvs_handle, string, pattern_bytes, &length);
+
+    for (uint8_t i = 0; i < length; i++) {
+        script->pattern[i] = pattern_bytes[i] == 0 ? PRESS : LONG_PRESS;
+    }
 
     script->pattern_size = length;
     nvs_close(nvs_handle);
@@ -214,7 +227,12 @@ void storage_set_script(nvs_script_t *script, uint8_t script_id) {
     nvs_set_str(nvs_handle, string, script->script);
 
     sprintf(string, "%s%i", NVS_SCRIPT_PATTERN_KEY, script_id);
-    nvs_set_blob(nvs_handle, string, script->pattern, sizeof(power_button_press_t) * script->pattern_size);
+    uint8_t pattern_bytes[script->pattern_size];
+    for (uint8_t i = 0; i < script->pattern_size; i++) {
+        pattern_bytes[i] = script->pattern[i] == PRESS ? 0 : 1;
+    }
+
+    nvs_set_blob(nvs_handle, string, (char *) pattern_bytes, script->pattern_size);
 
     nvs_commit(nvs_handle);
     nvs_close(nvs_handle);
