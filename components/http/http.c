@@ -424,186 +424,18 @@ esp_err_t configuration_server_configuration_set(httpd_req_t *req) {
 }
 
 void configuration_server_actions_response(httpd_req_t *req, uint8_t id) {
-    nvs_script_t script;
-
-    storage_get_script(&script, id);
-    cJSON *script_json = cJSON_CreateObject();
-    cJSON *pattern_array_json = cJSON_CreateArray();
-
-    if ((script.valid == false) 
-        && (script.name == NULL)
-        && (script.script == NULL)
-        && (script.pattern == NULL)
-        && (script.pattern_size ==0)) {
-            cJSON_AddStringToObject(script_json, "name", "");
-            cJSON_AddStringToObject(script_json, "script", "");
-            cJSON_AddItemToObject(script_json, "pattern", pattern_array_json);
-            cJSON_AddNumberToObject(script_json, "pattern_size", 0);
-            cJSON_AddBoolToObject(script_json, "valid", false);
-    } else {
-        //else return anything found in nvs
-
-        cJSON_AddNumberToObject(script_json, "scriptID", id);
-        cJSON_AddBoolToObject(script_json, "valid", script.valid);
-        cJSON_AddStringToObject(script_json, "name", script.name);
-        cJSON_AddStringToObject(script_json, "script", script.script);
-
-        for (int i = 0; i < script.pattern_size; i++) {
-            char *press_type = script.pattern[i] == PRESS ? "PRESS" : "LONG_PRESS";
-            cJSON *press_type_json = cJSON_CreateString(press_type);
-            cJSON_AddItemToArray(pattern_array_json, press_type_json);
-        }
-
-        cJSON_AddItemToObject(script_json, "pattern", pattern_array_json);
-    }
-
-    //this means there is data available
-    char *string = cJSON_Print(script_json);
-
-    httpd_resp_send(req, string, HTTPD_RESP_USE_STRLEN);
-
-    free(script.name);
-    free(script.script);
-    free(script.pattern);
-    cJSON_Delete(script_json);
-    free(string);
 }
 
 esp_err_t configuration_server_actions_get(httpd_req_t *req) {
-    //should respond data from nvs
-    // httpd_resp_send(req, (const char *)index_html_start, index_html_end - index_html_start - 1);
-
-    //verify size, should be 
-    uint8_t expected_size = sizeof("/configuration/actions/1") - 1;
-    printf("expected size %u", expected_size);
-    uint8_t id = atoi(&(req->uri[expected_size - 1]));
-    printf("id %u", id);
-
-    if ((expected_size != strlen(req->uri)) || ((id < 1) || (id > 5))) {
-        cJSON *error = cJSON_CreateObject();
-        cJSON_AddStringToObject(error, "error", "bad request - expecting a number between 1 and 5");
-        char *error_string = cJSON_Print(error);
-        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, error_string);
-        cJSON_Delete(error);
-        free(error_string);
-        return ESP_OK;
-    }
-
-    configuration_server_actions_response(req, id);
+    // configuration_server_actions_response(req, id);
     return ESP_OK;
 }
 
 esp_err_t configuration_server_actions_set(httpd_req_t *req) {
-
-    if (req->content_len > 4096) {
-        cJSON *error = cJSON_CreateObject();
-        cJSON_AddStringToObject(error, "error", "content too long, must be 4096 bytes maximum");
-        char *error_string = cJSON_Print(error);
-        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, error_string);
-        cJSON_Delete(error);
-        free(error_string);
-        return ESP_OK;
-    }
-
-    char content[req->content_len];
-    int ret = httpd_req_recv(req, content, req->content_len);
-    cJSON_validator_t validator;
-
-    json_validator_init(content, &validator, NULL);
-    json_validator_object_not_empty(&validator, NULL);
-    char *array_of_keys[] = {"valid", "name", "script", "pattern", "scriptID"};
-    json_validator_contains_only(&validator, array_of_keys, 5, NULL); //verify that the object has only one of these keys
-
-    //validate only if key exists since we already know that at least one exits from the previouse check
-    json_validator_key_is_bool(&validator, "valid", NULL);
-    json_validator_key_is_string_with_size_between(&validator, "name", 1, 32, "name field has to be a string 1 to 31 characters long");
-    json_validator_key_is_string_with_size_between(&validator, "script", 0, 3900, "script field has to be a string 1 to 3800 characters long");
-    json_validator_key_is_array(&validator, "pattern", NULL);
-    json_validator_key_is_integer_between(&validator, "scriptID", 1, 5, NULL);
-
-    if (!validator.valid) { //not valid return error
-        cJSON *error = cJSON_CreateObject();
-        cJSON_AddStringToObject(error, "error", validator.error_message);
-        char *error_string = cJSON_Print(error);
-        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, error_string);
-
-        json_validator_delete(&validator);
-        cJSON_Delete(error);
-        free(error_string);
-        return ESP_OK;
-    }
-
-    //let's check array, it must be a string array with up to 5 patterns 
-    cJSON *pattern_array = cJSON_GetObjectItemCaseSensitive(validator.json, "pattern"); 
-    int pattern_size = cJSON_GetArraySize(pattern_array);
-    bool valid_array = true;
-    power_button_press_t pattern[pattern_size];
-
-    for (int i = 0; i < pattern_size; i++) {
-        cJSON *array_element = cJSON_GetArrayItem(pattern_array, i);
-        if (!cJSON_IsString(array_element)) {
-            valid_array = false;
-            break;
-        }
-
-        bool press = strcmp(array_element->valuestring, "PRESS") == 0 ? true : false;
-        bool long_press = strcmp(array_element->valuestring, "LONG_PRESS") == 0 ? true : false;
-
-        if ((!long_press) && (!press)) {
-            valid_array = false;
-            break;
-        }
-
-        pattern[i] = press ? PRESS : LONG_PRESS; 
-    }
-
-    if ((pattern_size < 1) || (pattern_size > 5) || (!valid_array)) {
-        cJSON *error = cJSON_CreateObject();
-        cJSON_AddStringToObject(error, "error", "pattern field has to be a string array with only LONG_PRESS or PRESS and between 1 and 5 indexes");
-        char *error_string = cJSON_Print(error);
-        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, error_string);
-
-        json_validator_delete(&validator);
-        cJSON_Delete(error);
-        free(error_string);
-        return ESP_OK;
-    }
-
-    //ok, now the actual save
-    cJSON *valid = cJSON_GetObjectItemCaseSensitive(validator.json, "valid");
-    cJSON *name = cJSON_GetObjectItemCaseSensitive(validator.json, "name");
-    cJSON *script = cJSON_GetObjectItemCaseSensitive(validator.json, "script");
-    cJSON *script_id = cJSON_GetObjectItemCaseSensitive(validator.json, "scriptID");
-
-    //TODO: this needs to be reverted to its original, more performant form
-    nvs_script_t nvs_script;
-
-    nvs_script.valid = cJSON_IsTrue(valid);
-    nvs_script.pattern_size = pattern_size;
-
-    nvs_script.pattern = malloc(sizeof(power_button_press_t) * pattern_size);
-    nvs_script.name = malloc(strlen(name->valuestring) + 1);
-    nvs_script.script = malloc(strlen(script->valuestring) + 1);
-
-    memcpy(nvs_script.pattern, pattern, sizeof(power_button_press_t) * pattern_size);
-    strcpy(nvs_script.name, name->valuestring);
-    strcpy(nvs_script.script, script->valuestring);
-
-    storage_set_script(&nvs_script, script_id->valueint);
-
-    free(nvs_script.pattern);
-    free(nvs_script.name);
-    free(nvs_script.script);
-    //saved, read from nvs and return it
-
-    configuration_server_actions_response(req, script_id->valueint);
-    json_validator_delete(&validator);
     return ESP_OK;
 }
 
 esp_err_t configuration_server_actions_delete(httpd_req_t *req) {
-    //if data valid should store data in nvs
-    // httpd_resp_send(req, (const char *)styles_css_start, styles_css_end - styles_css_start - 1);
     return ESP_OK;
 }
 

@@ -15,15 +15,19 @@
 #define NVS_CREDENTIALS_PASSWORD_KEY "cred_pass"
 #define NVS_AP_CREDENTIALS_PASSWORD_KEY "ap_cred_pass"
 #define NVS_AP_CREDENTIALS_SSID_KEY "ap_cred_ssid"
-#define NVS_SCRIPTS_INFO_KEY "ap_cred_ssid"
 #define NVS_CREDENTIALS_VALID 1
 #define NVS_CREDENTIALS_NOT_VALID 0
 
-#define NVS_SCRIPTS_NAMESPACE "scripts"
-#define NVS_SCRIPT_NAME_KEY "script_n"
-#define NVS_SCRIPT_PATTERN_KEY "script_p"
-#define NVS_SCRIPT_VALID_KEY "script_v"
-#define NVS_SCRIPT_KEY "script"
+#define NVS_ACTIONS_NAMESPACE "action"
+#define NVS_ACTIONS_VALID_KEY "action_v"
+#define NVS_ACTIONS_NAME_KEY "action_n"
+#define NVS_ACTIONS_URL_KEY "action_u"
+#define NVS_ACTIONS_HEADER_VALUE_KEY "action_h"
+#define NVS_ACTIONS_HEADER_KEY_KEY "action_k"
+#define NVS_ACTIONS_BODY_KEY "action_b"
+#define NVS_ACTIONS_COLOR_KEY "action_c"
+#define NVS_ACTIONS_PATTERN_KEY "action_p"
+#define NVS_ACTIONS_HEADER_COUNT_KEY "action_hc"
 
 void storage_init(void) {
     nvs_flash_init();
@@ -150,90 +154,100 @@ void storage_get_ap_credentials(nvs_ap_credentials_t *ap_credentials) {
     nvs_close(nvs_handle);
 }
 
-void storage_get_script(nvs_script_t *script, uint8_t script_id) {
+bool storage_get_action(nvs_action_t *action, uint8_t action_id) {
     nvs_handle_t nvs_handle;
-    size_t length;
-    esp_err_t err;
-    script->valid = false;
-    script->script = NULL;
-    script->name = NULL;
-    script->pattern = NULL;
-    script->pattern_size = 0;
-
-    err = nvs_open(NVS_SCRIPTS_NAMESPACE, NVS_READWRITE, &nvs_handle);
-    char string[20]; //20 is just a safety net, the output string should never go over 20
-    sprintf(string, "%s%i", NVS_SCRIPT_VALID_KEY, script_id);
-
+    char string[20];
     uint8_t valid;
+    size_t length = 0;
+    esp_err_t err;
+
+    err = nvs_open(NVS_ACTIONS_NAMESPACE, NVS_READWRITE, &nvs_handle);
+
+    sprintf(string, "%s%u", NVS_ACTIONS_VALID_KEY, action_id);
     err = nvs_get_u8(nvs_handle, string, &valid);
 
     if (err == ESP_ERR_NVS_NOT_FOUND) {
-        //nvs not found
-        nvs_set_u8(nvs_handle, string, 0);
-
-        sprintf(string, "%s%i", NVS_SCRIPT_NAME_KEY, script_id);
-        nvs_set_str(nvs_handle, string, "");
-        sprintf(string, "%s%i", NVS_SCRIPT_KEY, script_id);
-        nvs_set_str(nvs_handle, string, "");
-        sprintf(string, "%s%i", NVS_SCRIPT_PATTERN_KEY, script_id);
-        power_button_press_t pattern_array[1];
-        nvs_set_blob(nvs_handle, string, pattern_array, sizeof(power_button_press_t) * 0);
-        nvs_commit(nvs_handle);
-        nvs_close(nvs_handle);
-        return;
+        return false;
     }
 
-    script->valid = valid == 1 ? true : false;
+    action->valid = valid ? true : false;
+    sprintf(string, "%s%u", NVS_ACTIONS_COLOR_KEY, action_id);
+    nvs_get_u8(nvs_handle, string, &action->color);
 
-    sprintf(string, "%s%i", NVS_SCRIPT_NAME_KEY, script_id);
+    sprintf(string, "%s%u", NVS_ACTIONS_NAME_KEY, action_id);
     nvs_get_str(nvs_handle, string, NULL, &length);
-    script->name = malloc(length);
-    nvs_get_str(nvs_handle, string, script->name, &length);
+    action->name = malloc(length);
+    nvs_get_str(nvs_handle, string, action->name, &length);
 
-    sprintf(string, "%s%i", NVS_SCRIPT_KEY, script_id);
+    sprintf(string, "%s%u", NVS_ACTIONS_URL_KEY, action_id);
     nvs_get_str(nvs_handle, string, NULL, &length);
-    script->script = malloc(length);
-    nvs_get_str(nvs_handle, string, script->script, &length);
+    action->url = malloc(length);
+    nvs_get_str(nvs_handle, string, action->url, &length);
 
-    sprintf(string, "%s%i", NVS_SCRIPT_PATTERN_KEY, script_id);
+    sprintf(string, "%s%u", NVS_ACTIONS_PATTERN_KEY, action_id);
     nvs_get_blob(nvs_handle, string, NULL, &length);
-    script->pattern = malloc(length);
-    uint8_t pattern_bytes[length];
-    nvs_get_blob(nvs_handle, string, pattern_bytes, &length);
-
+    action->pattern = malloc(sizeof(power_button_press_t) * length);
+    uint8_t pattern[length];
+    nvs_get_blob(nvs_handle, string, pattern, &length);
     for (uint8_t i = 0; i < length; i++) {
-        script->pattern[i] = pattern_bytes[i] == 0 ? PRESS : LONG_PRESS;
+        action->pattern[i] = pattern[i] == 0 ? PRESS : LONG_PRESS;
     }
 
-    script->pattern_size = length;
-    nvs_close(nvs_handle);
+    action->pattern_size = length;
+
+    sprintf(string, "%s%u", NVS_ACTIONS_HEADER_COUNT_KEY, action_id);
+    nvs_get_u8(nvs_handle, string, &action->header_count);
+
+    action->header_values = malloc(sizeof(char *) * action->header_count);
+    action->header_keys = malloc(sizeof(char *) * action->header_count);
+
+    for (uint8_t i = 0; i < action->header_count; i++) {
+        sprintf(string, "%s%u-%u", NVS_ACTIONS_HEADER_KEY_KEY, action_id, i);
+        nvs_get_str(nvs_handle, string, NULL, &length);
+        action->header_keys[i] = malloc(sizeof(char) * length);
+        nvs_get_str(nvs_handle, string, action->header_keys[i], &length);
+
+        sprintf(string, "%s%u-%u", NVS_ACTIONS_HEADER_VALUE_KEY, action_id, i);
+        nvs_get_str(nvs_handle, string, NULL, &length);
+        action->header_values[i] = malloc(sizeof(char) * length);
+        nvs_get_str(nvs_handle, string, action->header_values[i], &length);
+    }
+
+    return true;
 }
 
-void storage_set_script(nvs_script_t *script, uint8_t script_id) {
+void storage_set_action(nvs_action_t *action, uint8_t action_id) {
     nvs_handle_t nvs_handle;
-    esp_err_t err;
+    char string[20];
 
-    err = nvs_open(NVS_SCRIPTS_NAMESPACE, NVS_READWRITE, &nvs_handle);
-    char string[20]; //20 is just a safety net, the output string should never go over 20
+    nvs_open(NVS_ACTIONS_NAMESPACE, NVS_READWRITE, &nvs_handle);
 
-    sprintf(string, "%s%i", NVS_SCRIPT_VALID_KEY, script_id);
-    uint8_t valid = script->valid ? 1 : 0;
-    nvs_set_u8(nvs_handle, string, valid);
+    sprintf(string, "%s%u", NVS_ACTIONS_VALID_KEY, action_id);
+    nvs_set_u8(nvs_handle, string, action->valid ? 1 : 0);
 
-    sprintf(string, "%s%i", NVS_SCRIPT_NAME_KEY, script_id);
-    nvs_set_str(nvs_handle, string, script->name);
+    sprintf(string, "%s%u", NVS_ACTIONS_COLOR_KEY, action_id);
+    nvs_set_u8(nvs_handle, string, action->color);
 
-    sprintf(string, "%s%i", NVS_SCRIPT_KEY, script_id);
-    nvs_set_str(nvs_handle, string, script->script);
+    sprintf(string, "%s%u", NVS_ACTIONS_NAME_KEY, action_id);
+    nvs_set_str(nvs_handle, string, action->name);
 
-    sprintf(string, "%s%i", NVS_SCRIPT_PATTERN_KEY, script_id);
-    uint8_t pattern_bytes[script->pattern_size];
-    for (uint8_t i = 0; i < script->pattern_size; i++) {
-        pattern_bytes[i] = script->pattern[i] == PRESS ? 0 : 1;
+    sprintf(string, "%s%u", NVS_ACTIONS_URL_KEY, action_id);
+    nvs_set_str(nvs_handle, string, action->url);
+
+    uint8_t pattern[action->pattern_size];
+    for (uint8_t i = 0; i < action->pattern_size; i++) {
+        pattern[i] = action->pattern[i] == PRESS ? 0 : 1;
     }
+    sprintf(string, "%s%u", NVS_ACTIONS_PATTERN_KEY, action_id);
+    nvs_set_blob(nvs_handle, string, pattern, action->pattern_size);
 
-    nvs_set_blob(nvs_handle, string, (char *) pattern_bytes, script->pattern_size);
+    sprintf(string, "%s%u", NVS_ACTIONS_HEADER_COUNT_KEY, action_id);
+    nvs_set_u8(nvs_handle, string, action->header_count);
 
-    nvs_commit(nvs_handle);
-    nvs_close(nvs_handle);
+    for (uint8_t i = 0; i < action->header_count; i++) {
+        sprintf(string, "%s%u-%u", NVS_ACTIONS_HEADER_KEY_KEY, action_id, i);
+        nvs_set_str(nvs_handle, string, action->header_keys[i]);
+        sprintf(string, "%s%u-%u", NVS_ACTIONS_HEADER_VALUE_KEY, action_id, i);
+        nvs_set_str(nvs_handle, string, action->header_values[i]);
+    }
 }

@@ -24,8 +24,12 @@ typedef struct {
     char *name;
     power_button_press_t *pattern;
     uint8_t pattern_size;
-    char *script;
-} nvs_script_t;
+    char *url;
+    char **header_keys;
+    char **header_values;
+    uint8_t header_count;
+    uint8_t color;
+} nvs_action_t;
 
 void storage_get_credentials(nvs_credentials_t *credentials);
 void storage_set_credentials(nvs_credentials_t *credentials);
@@ -33,6 +37,6 @@ void storage_get_configuration(nvs_configuration_t *configuration);
 void storage_set_configuration(nvs_configuration_t *configuration);
 void storage_set_ap_credentials(nvs_ap_credentials_t *ap_credentials);
 void storage_get_ap_credentials(nvs_ap_credentials_t *ap_credentials);
-void storage_get_script(nvs_script_t *nvs_script_t, uint8_t script_id);
-void storage_set_script(nvs_script_t *nvs_script_t, uint8_t script_id);
+void storage_set_action(nvs_action_t *action, uint8_t action_id);
+bool storage_get_action(nvs_action_t *action, uint8_t action_id);
 void storage_init(void);
