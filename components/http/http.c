@@ -223,6 +223,17 @@ esp_err_t configuration_server_credentials_delete(httpd_req_t *req) {
     return ESP_OK;
 }
 
+void configuration_server_report_json_error(httpd_req_t *req, httpd_err_code_t error_code, char *error_str) {
+    cJSON *error = cJSON_CreateObject();
+    cJSON_AddStringToObject(error, "error", error_str);
+    char *string = cJSON_Print(error);
+
+    httpd_resp_send_err(req, error_code, error_string);
+
+    free(string);
+    cJSON_Delete(error);
+}
+
 esp_err_t configuration_server_credentials_get(httpd_req_t *req) {
     nvs_credentials_t credentials;
     storage_get_credentials(&credentials);
@@ -259,27 +270,15 @@ esp_err_t configuration_server_credentials_set(httpd_req_t *req) {
     json_validator_key_is_string_with_size_between(&validator, "password", 0, 64, "password field has to be an empty string or have between 8 and 64 characters long");
 
     if (!validator.valid) { //not valid return error
-        cJSON *error = cJSON_CreateObject();
-        cJSON_AddStringToObject(error, "error", validator.error_message);
-        char *error_string = cJSON_Print(error);
-        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, error_string);
-
+        configuration_server_report_json_error(req, HTTPD_400_BAD_REQUEST, validator.error_message);
         json_validator_delete(&validator);
-        cJSON_Delete(error);
-        free(error_string);
         return ESP_OK;
     }
 
     cJSON *password = cJSON_GetObjectItemCaseSensitive(validator.json, "password");
     if (strlen(password->valuestring) < 8) {
-        cJSON *error = cJSON_CreateObject();
-        cJSON_AddStringToObject(error, "error", "password field needs to contain at least 8 characters");
-        char *error_string = cJSON_Print(error);
-        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, error_string);
-
+        configuration_server_report_json_error(req, HTTPD_400_BAD_REQUEST, "password field needs to contain at least 8 characters");
         json_validator_delete(&validator);
-        cJSON_Delete(error);
-        free(error_string);
         return ESP_OK;
     }
     cJSON *ssid = cJSON_GetObjectItemCaseSensitive(validator.json, "ssid");
@@ -385,14 +384,8 @@ esp_err_t configuration_server_configuration_set(httpd_req_t *req) {
     json_validator_if_key_exists_is_integer_between(&validator, "longPressMs", 200, 500, NULL);
 
     if (!validator.valid) { //not valid return error
-        cJSON *error = cJSON_CreateObject();
-        cJSON_AddStringToObject(error, "error", validator.error_message);
-        char *error_string = cJSON_Print(error);
-        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, error_string);
-
+        configuration_server_report_json_error(req, HTTPD_400_BAD_REQUEST, validator.error_message);
         json_validator_delete(&validator);
-        cJSON_Delete(error);
-        free(error_string);
         return ESP_OK;
     }
 
@@ -424,10 +417,67 @@ esp_err_t configuration_server_configuration_set(httpd_req_t *req) {
 }
 
 void configuration_server_actions_response(httpd_req_t *req, uint8_t id) {
+    nvs_action_t action;
+    bool id_exists = storage_get_action(&action, id);
+
+    if (!id_exits) {
+        httpd_resp_send(req, "{}", HTTPD_RESP_USE_STRLEN);
+        return;
+    }
+
+    // char **header_keys;
+    // char **header_values;
+    // uint8_t header_count;
+
+    cJSON *action_json = cJSON_CreateObject();
+    cJSON *pattern_array_json = cJSON_CreateArray();
+
+    cJSON_AddNumberToObject(action_json, "actionID", id);
+    cJSON_AddBoolToObject(action_json, "valid", action.valid);
+    cJSON_AddStringToObject(action_json, "name", action.name);
+    cJSON_AddStringToObject(action_json, "url", action.url);
+    cJSON_AddNumberToObject(action_json, "color", action.color);
+    cJSON_AddStringToObject(action_json, "body", action.body);
+
+    for (int i = 0; i < action.pattern_size; i++) {
+        char *press_type = action.pattern[i] == PRESS ? "PRESS" : "LONG_PRESS";
+        cJSON *press_type_json = cJSON_CreateString(press_type);
+        cJSON_AddItemToArray(pattern_array_json, press_type_json);
+    }
+
+    cJSON_AddItemToObject(action_json, "pattern", pattern_array_json);
+
+    cJSON *headers_json = cJSON_CreateObject();
+    for (int i = 0; i < action.header_count; i++) {
+        cJSON_AddStringToObject(headers_json, action.header_keys[i], action.header_values[i]);
+        free(action.header_keys[i]);
+        free(action.header_values[i]);
+    }
+
+    cJSON_AddItemToObject(action_json, "headers", headers_json);
+    char *string = cJSON_Print(action_json);
+
+    httpd_resp_send(req, string, HTTPD_RESP_USE_STRLEN);
+
+    cJSON_Delete(action_json);
+    free(string);
+    free(action.url);
+    free(action.body);
+    free(action.pattern);
+    free(action.header_keys);
+    free(action.header_values);
 }
 
 esp_err_t configuration_server_actions_get(httpd_req_t *req) {
-    // configuration_server_actions_response(req, id);
+
+    uint8_t expected_size = sizeof("/configuration/actions/1") - 1;
+    uint8_t id = atoi(&(req->uri[expected_size - 1]));
+    if ((expected_size != strlen(req->uri)) || ((id < 1) || (id > 5))) {
+        configuration_server_report_json_error(req, HTTPD_400_BAD_REQUEST, "id value should be a number between 1 and 5 (inclusive)");
+        return ESP_OK;
+    }
+
+    configuration_server_actions_response(req, id);
     return ESP_OK;
 }
 
@@ -477,14 +527,8 @@ esp_err_t configuration_server_server_credentials_set(httpd_req_t *req) {
     json_validator_key_is_string_with_size_between(&validator, "password", 8, 64, "password field has to be a string between 8 and 64 characters long");
 
     if (!validator.valid) { //not valid return error
-        cJSON *error = cJSON_CreateObject();
-        cJSON_AddStringToObject(error, "error", validator.error_message);
-        char *error_string = cJSON_Print(error);
-        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, error_string);
-
+        configuration_server_report_json_error(req, HTTPD_400_BAD_REQUEST, validator.error_message);
         json_validator_delete(&validator);
-        cJSON_Delete(error);
-        free(error_string);
         return ESP_OK;
     }
 

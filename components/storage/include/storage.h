@@ -25,6 +25,7 @@ typedef struct {
     power_button_press_t *pattern;
     uint8_t pattern_size;
     char *url;
+    char *body;
     char **header_keys;
     char **header_values;
     uint8_t header_count;

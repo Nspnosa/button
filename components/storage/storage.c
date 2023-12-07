@@ -213,6 +213,12 @@ bool storage_get_action(nvs_action_t *action, uint8_t action_id) {
         nvs_get_str(nvs_handle, string, action->header_values[i], &length);
     }
 
+    sprintf(string, "%s%u", NVS_ACTIONS_BODY_KEY, action_id);
+    nvs_get_str(nvs_handle, string, NULL, &length);
+    action->body = malloc(sizeof(char) * length);
+    nvs_get_str(nvs_handle, string, action->body, &length);
+
+    nvs_close(nvs_handle);
     return true;
 }
 
@@ -234,6 +240,9 @@ void storage_set_action(nvs_action_t *action, uint8_t action_id) {
     sprintf(string, "%s%u", NVS_ACTIONS_URL_KEY, action_id);
     nvs_set_str(nvs_handle, string, action->url);
 
+    sprintf(string, "%s%u", NVS_ACTIONS_BODY_KEY, action_id);
+    nvs_set_str(nvs_handle, string, action->body);
+
     uint8_t pattern[action->pattern_size];
     for (uint8_t i = 0; i < action->pattern_size; i++) {
         pattern[i] = action->pattern[i] == PRESS ? 0 : 1;
@@ -250,4 +259,6 @@ void storage_set_action(nvs_action_t *action, uint8_t action_id) {
         sprintf(string, "%s%u-%u", NVS_ACTIONS_HEADER_VALUE_KEY, action_id, i);
         nvs_set_str(nvs_handle, string, action->header_values[i]);
     }
+    nvs_commit(nvs_handle);
+    nvs_close(nvs_handle);
 }
