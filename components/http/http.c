@@ -482,6 +482,73 @@ esp_err_t configuration_server_actions_get(httpd_req_t *req) {
 }
 
 esp_err_t configuration_server_actions_set(httpd_req_t *req) {
+    size_t content_size = req->content_len;
+    if (content_size > 4096) {
+        configuration_server_report_json_error(req, HTTPD_400_BAD_REQUEST, "Content too long, should be at most 4096 bytes");
+        return ESP_OK;
+    }
+
+    char content[content_size];
+    int ret = httpd_req_recv(req, content, content_size);
+    cJSON_validator_t validator;
+
+    json_validator_init(content, &validator, NULL);
+    json_validator_object_not_empty(&validator, NULL);
+
+    char *array_of_keys[] = {"actionID", "valid", "name", "pattern", "url", "body", "headers", "color"};
+    json_validator_contains_only(&validator, array_of_keys, 8, NULL); //verify that the object has only one of these keys
+
+    if (!validator.valid) { //not valid return error
+        configuration_server_report_json_error(req, HTTPD_400_BAD_REQUEST, validator.error_message);
+        json_validator_delete(&validator);
+        return ESP_OK;
+    }
+
+    json_validator_key_is_integer_between(&validator, "actionID", 1, 5, "actionID should an integer between 1 and 5");
+    json_validator_key_is_bool(validator, "valid");
+    json_validator_key_is_string_with_size_between(validator, "name", "name should be an integer between 1 and 32 characters long");
+    json_validator_key_is_array(validator, "pattern", NULL);
+    json_validator_key_is_string_with_size_between(validator, "url", "url should be a string between 1 and 32 characters long");
+
+    json_validator_key_is_string(validator, "body", NULL);  //body has to be a string
+    json_validator_key_is_object(validator, "headers", NULL); //headers have to be an object
+    json_validator_key_is_integer_between(validator, "color", 1, 10, "color should an integer between 1 and 10");
+
+    if (!validator.valid) { //not valid return error
+        configuration_server_report_json_error(req, HTTPD_400_BAD_REQUEST, validator.error_message);
+        json_validator_delete(&validator);
+        return ESP_OK;
+    }
+
+    cJSON *action_id_json = cJSON_GetObjectItemCaseSensitive(validator.json, "actionID");
+    cJSON *valid_json = cJSON_GetObjectItemCaseSensitive(validator.json, "valid");
+    cJSON *name_json = cJSON_GetObjectItemCaseSensitive(validator.json, "name");
+    cJSON *pattern_json = cJSON_GetObjectItemCaseSensitive(validator.json, "pattern");
+    cJSON *url_json = cJSON_GetObjectItemCaseSensitive(validator.json, "url");
+    cJSON *body_json = cJSON_GetObjectItemCaseSensitive(validator.json, "body");
+    cJSON *headers_json = cJSON_GetObjectItemCaseSensitive(validator.json, "headers");
+    cJSON *color_json = cJSON_GetObjectItemCaseSensitive(validator.json, "color");
+
+    power_button_press_t pattern;
+
+    // bool valid;
+    // char *name;
+    // power_button_press_t *pattern;
+    // uint8_t pattern_size;
+    // char *url;
+    // char *body;
+    // char **header_keys;
+    // char **header_values;
+    // uint8_t header_count;
+    // uint8_t color;
+    
+    nvs_action_t action;
+    action.valid = cJSON_IsTrue(valid_json);
+    action.name = name_json->valuestring;
+    action.pattern_size = cJSON_GetArraySize(pattern_json);
+
+    action.pattern = name_json->valuestring;
+
     return ESP_OK;
 }
 
