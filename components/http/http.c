@@ -223,9 +223,9 @@ esp_err_t configuration_server_credentials_delete(httpd_req_t *req) {
     return ESP_OK;
 }
 
-void configuration_server_report_json_error(httpd_req_t *req, httpd_err_code_t error_code, char *error_str) {
+void configuration_server_report_json_error(httpd_req_t *req, httpd_err_code_t error_code, char *error_string) {
     cJSON *error = cJSON_CreateObject();
-    cJSON_AddStringToObject(error, "error", error_str);
+    cJSON_AddStringToObject(error, "error", error_string);
     char *string = cJSON_Print(error);
 
     httpd_resp_send_err(req, error_code, error_string);
@@ -420,7 +420,7 @@ void configuration_server_actions_response(httpd_req_t *req, uint8_t id) {
     nvs_action_t action;
     bool id_exists = storage_get_action(&action, id);
 
-    if (!id_exits) {
+    if (!id_exists) {
         httpd_resp_send(req, "{}", HTTPD_RESP_USE_STRLEN);
         return;
     }
@@ -505,14 +505,14 @@ esp_err_t configuration_server_actions_set(httpd_req_t *req) {
     }
 
     json_validator_key_is_integer_between(&validator, "actionID", 1, 5, "actionID should an integer between 1 and 5");
-    json_validator_key_is_bool(validator, "valid");
-    json_validator_key_is_string_with_size_between(validator, "name", "name should be an integer between 1 and 32 characters long");
-    json_validator_key_is_array(validator, "pattern", NULL);
-    json_validator_key_is_string_with_size_between(validator, "url", "url should be a string between 1 and 32 characters long");
+    json_validator_key_is_bool(&validator, "valid", NULL);
+    json_validator_key_is_string_with_size_between(&validator, "name", 1, 32, "name should be an integer between 1 and 32 characters long");
+    json_validator_key_is_array(&validator, "pattern", NULL);
+    json_validator_key_is_string_with_size_between(&validator, "url", 5, 300, "url should be a string between 5 and 300 characters long");
 
-    json_validator_key_is_string(validator, "body", NULL);  //body has to be a string
-    json_validator_key_is_object(validator, "headers", NULL); //headers have to be an object
-    json_validator_key_is_integer_between(validator, "color", 1, 10, "color should an integer between 1 and 10");
+    json_validator_key_is_string(&validator, "body", NULL);  //body has to be a string
+    json_validator_key_is_object(&validator, "headers", NULL); //headers have to be an object
+    json_validator_key_is_integer_between(&validator, "color", 1, 10, "color should an integer between 1 and 10");
 
     if (!validator.valid) { //not valid return error
         configuration_server_report_json_error(req, HTTPD_400_BAD_REQUEST, validator.error_message);
@@ -520,34 +520,84 @@ esp_err_t configuration_server_actions_set(httpd_req_t *req) {
         return ESP_OK;
     }
 
+    nvs_action_t action;
+
+    //first validate headers
+    cJSON *headers_json = cJSON_GetObjectItemCaseSensitive(validator.json, "headers");
+    uint8_t header_cnt = cJSON_GetArraySize(headers_json);
+    action.header_keys = malloc(sizeof(char *) * header_cnt);
+    action.header_values = malloc(sizeof(char *) * header_cnt);
+    action.header_count = header_cnt;
+
+    uint8_t i = 0;
+    cJSON *current_element = NULL;
+    cJSON_ArrayForEach(current_element, headers_json) {
+        if (!cJSON_IsString(current_element)) {
+            free(action.header_keys);
+            free(action.header_values);
+            configuration_server_report_json_error(req, HTTPD_400_BAD_REQUEST, "Headers key needs to be an object with only string values");
+            json_validator_delete(&validator);
+            return ESP_OK;
+        }
+        action.header_keys[i] = current_element->string;
+        action.header_values[i] = current_element->valuestring;
+        i++;
+    }
+
+    cJSON *pattern_json = cJSON_GetObjectItemCaseSensitive(validator.json, "pattern");
+    action.pattern_size = cJSON_GetArraySize(pattern_json);
+    action.pattern = malloc(sizeof(power_button_press_t) * action.pattern_size);
+
+    i = 0;
+    cJSON_ArrayForEach(current_element, pattern_json) {
+        if (!cJSON_IsString(current_element)) {
+            free(action.header_keys);
+            free(action.header_values);
+            free(action.pattern);
+            configuration_server_report_json_error(req, HTTPD_400_BAD_REQUEST, "Pattern needs to be a string array.");
+            json_validator_delete(&validator);
+            return ESP_OK;
+        }
+
+        bool long_press = strcmp(current_element->valuestring, "LONG_PRESS") == 0;
+        bool press = strcmp(current_element->valuestring, "PRESS") == 0;
+
+         if (!long_press && !press) {
+            free(action.header_keys);
+            free(action.header_values);
+            free(action.pattern);
+            configuration_server_report_json_error(req, HTTPD_400_BAD_REQUEST, "pattern needs to be a string array with only \"PRESS\" or \"LONG_PRESS\" in it.");
+            json_validator_delete(&validator);
+            return ESP_OK;
+        }
+
+        action.pattern[i] = press ? PRESS : LONG_PRESS;
+        i++;
+    }
+
     cJSON *action_id_json = cJSON_GetObjectItemCaseSensitive(validator.json, "actionID");
     cJSON *valid_json = cJSON_GetObjectItemCaseSensitive(validator.json, "valid");
     cJSON *name_json = cJSON_GetObjectItemCaseSensitive(validator.json, "name");
-    cJSON *pattern_json = cJSON_GetObjectItemCaseSensitive(validator.json, "pattern");
     cJSON *url_json = cJSON_GetObjectItemCaseSensitive(validator.json, "url");
     cJSON *body_json = cJSON_GetObjectItemCaseSensitive(validator.json, "body");
-    cJSON *headers_json = cJSON_GetObjectItemCaseSensitive(validator.json, "headers");
     cJSON *color_json = cJSON_GetObjectItemCaseSensitive(validator.json, "color");
 
-    power_button_press_t pattern;
-
-    // bool valid;
-    // char *name;
-    // power_button_press_t *pattern;
-    // uint8_t pattern_size;
-    // char *url;
-    // char *body;
-    // char **header_keys;
-    // char **header_values;
-    // uint8_t header_count;
-    // uint8_t color;
-    
-    nvs_action_t action;
     action.valid = cJSON_IsTrue(valid_json);
     action.name = name_json->valuestring;
     action.pattern_size = cJSON_GetArraySize(pattern_json);
+    action.color = color_json->valueint;
+    action.url = url_json->valuestring;
+    action.body = body_json->valuestring;
 
-    action.pattern = name_json->valuestring;
+    storage_set_action(&action, action_id_json->valueint);
+    configuration_server_actions_response(req, action_id_json->valueint);
+
+    //we need to free everything now
+
+    json_validator_delete(&validator);
+    free(action.pattern);
+    free(action.header_keys);
+    free(action.header_values);
 
     return ESP_OK;
 }
