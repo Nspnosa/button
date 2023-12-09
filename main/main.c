@@ -45,18 +45,18 @@ void app_main() {
 
     button_t my_button;
     power_button_t my_power_button;
-    power_button_press_t my_press_pattern[3] = {PRESS, PRESS, PRESS};
-    power_button_press_t my_other_press_pattern[2] = {PRESS, LONG_PRESS};
-    power_button_press_t configuration_server_pattern[3] = {LONG_PRESS, LONG_PRESS, LONG_PRESS};
+    // power_button_press_t my_press_pattern[3] = {PRESS, PRESS, PRESS};
+    // power_button_press_t my_other_press_pattern[2] = {PRESS, LONG_PRESS};
+    power_button_press_t configuration_server_pattern[1] = {PRESS};
     int counter1 = 0;
     int counter2 = 0;
 
     button_init(1);
     button_configure(0, PULL_UP, configuration.debounce_ms, false, &my_button);
     power_button_configure(&my_button, &my_power_button, configuration.long_press_ms, configuration.action_delay_ms);
-    power_button_add_action(&my_power_button, my_press_pattern, 3, printing_function, &counter1);
-    power_button_add_action(&my_power_button, my_press_pattern, 2, other_printing_function, &counter2);
-    power_button_add_action(&my_power_button, configuration_server_pattern, 3, start_server, NULL);
+    // power_button_add_action(&my_power_button, my_press_pattern, 3, printing_function, &counter1);
+    // power_button_add_action(&my_power_button, my_press_pattern, 2, other_printing_function, &counter2);
+    power_button_add_action(&my_power_button, configuration_server_pattern, 1, start_server, NULL);
 
     while (1) {
         vTaskDelay(1000);

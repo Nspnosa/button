@@ -295,7 +295,7 @@ void json_validator_key_is_string(cJSON_validator_t *v_json, char *key, char *er
     if (!cJSON_IsString(string)) {
         v_json->valid = false;
         if (error == NULL) {
-            json_validator_add_error_with_key(v_json, ERROR_NOT_STRING, key);
+            json_validator_add_error_with_key(v_json, key, ERROR_NOT_STRING);
         } else {
             json_validator_add_error(v_json, error);
         }

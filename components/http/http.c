@@ -228,7 +228,7 @@ void configuration_server_report_json_error(httpd_req_t *req, httpd_err_code_t e
     cJSON_AddStringToObject(error, "error", error_string);
     char *string = cJSON_Print(error);
 
-    httpd_resp_send_err(req, error_code, error_string);
+    httpd_resp_send_err(req, error_code, string);
 
     free(string);
     cJSON_Delete(error);
