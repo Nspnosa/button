@@ -41,14 +41,15 @@ void app_main() {
     // bool should_start_configuration = storage_get_should_start_configuration_server();
     // bool credentials_exist = storage_get_credentials(&credentials);
 
-    //TODO: Should probably start server if no action has been saved
+    //TODO: Should also probably start server if no action has been saved
     // if (should_start_configuration || !credentials_exist) { //if configuration requested by user or no credentials
+    //    nvs_ap_credentials_t ap_credentials
+    //    storage_get_ap_credentials(&ap_credentials);
+    //    wifi_ap_start(ap_credentials.ssid, ap_credentials.password);
+    //    configuration_server_start();
     //    storage_set_should_start_configuration_server(false);
-    //    start_server();
     //    wait_forever();
     // }
-
-
 
     storage_init();
     nvs_configuration_t configuration;
