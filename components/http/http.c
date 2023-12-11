@@ -216,9 +216,7 @@ httpd_uri_t configuration_server_uri_server_credentials_set = {
 };
 
 esp_err_t configuration_server_credentials_delete(httpd_req_t *req) {
-    nvs_credentials_t credentials;
-    credentials.valid = false;
-    storage_set_credentials(&credentials);
+    storage_delete_credentials();
     httpd_resp_send(req, NULL, 0);
     return ESP_OK;
 }
@@ -236,11 +234,11 @@ void configuration_server_report_json_error(httpd_req_t *req, httpd_err_code_t e
 
 esp_err_t configuration_server_credentials_get(httpd_req_t *req) {
     nvs_credentials_t credentials;
-    storage_get_credentials(&credentials);
+    bool exists = storage_get_credentials(&credentials);
 
     cJSON *credentials_json = cJSON_CreateObject();
-    cJSON *ssid = credentials.valid ? cJSON_CreateString(credentials.ssid) : cJSON_CreateNull();
-    cJSON *password = credentials.valid ? cJSON_CreateString(credentials.password) : cJSON_CreateNull();
+    cJSON *ssid = exists ? cJSON_CreateString(credentials.ssid) : cJSON_CreateNull();
+    cJSON *password = exists ? cJSON_CreateString(credentials.password) : cJSON_CreateNull();
     cJSON_AddItemToObject(credentials_json, "ssid", ssid);
     cJSON_AddItemToObject(credentials_json, "password", password);
     char *string = cJSON_Print(credentials_json);
@@ -285,7 +283,6 @@ esp_err_t configuration_server_credentials_set(httpd_req_t *req) {
 
     //TODO: credentials should only be stored if connection to ap is successful
     nvs_credentials_t credentials = {
-        .valid = true,
         .ssid = ssid->valuestring,
         .password = password->valuestring,
     };
@@ -603,6 +600,16 @@ esp_err_t configuration_server_actions_set(httpd_req_t *req) {
 }
 
 esp_err_t configuration_server_actions_delete(httpd_req_t *req) {
+    uint8_t expected_size = sizeof("/configuration/actions/1") - 1;
+    uint8_t id = atoi(&(req->uri[expected_size - 1]));
+    if ((expected_size != strlen(req->uri)) || ((id < 1) || (id > 5))) {
+        configuration_server_report_json_error(req, HTTPD_400_BAD_REQUEST, "id value should be a number between 1 and 5 (inclusive)");
+        return ESP_OK;
+    }
+
+    storage_delete_action(id);
+
+    httpd_resp_send(req, "deleted", HTTPD_RESP_USE_STRLEN);
     return ESP_OK;
 }
 
@@ -678,6 +685,7 @@ void configuration_server_start(void) {
         httpd_register_uri_handler(server, &configuration_server_uri_configuration_set);
         httpd_register_uri_handler(server, &configuration_server_uri_actions_get);
         httpd_register_uri_handler(server, &configuration_server_uri_actions_set);
+        httpd_register_uri_handler(server, &configuration_server_uri_actions_delete);
         httpd_register_uri_handler(server, &configuration_server_uri_credentials_set);
         httpd_register_uri_handler(server, &configuration_server_uri_credentials_get);
         httpd_register_uri_handler(server, &configuration_server_uri_credentials_delete);

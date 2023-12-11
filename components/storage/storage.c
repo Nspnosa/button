@@ -15,6 +15,7 @@
 #define NVS_CREDENTIALS_PASSWORD_KEY "cred_pass"
 #define NVS_AP_CREDENTIALS_PASSWORD_KEY "ap_cred_pass"
 #define NVS_AP_CREDENTIALS_SSID_KEY "ap_cred_ssid"
+#define NVS_SHOULD_CONFIGURE_KEY "set_config"
 #define NVS_CREDENTIALS_VALID 1
 #define NVS_CREDENTIALS_NOT_VALID 0
 
@@ -33,49 +34,46 @@ void storage_init(void) {
     nvs_flash_init();
 }
 
-void storage_get_credentials(nvs_credentials_t *credentials) {
+bool storage_get_credentials(nvs_credentials_t *credentials) {
     nvs_handle_t nvs_handle;
     esp_err_t err;
     size_t length;
     uint8_t valid;
 
-    err = nvs_open(NVS_CONFIGURATION_NAMESPACE, NVS_READWRITE, &nvs_handle);
-    err = nvs_get_u8(nvs_handle, NVS_CREDENTIALS_VALID_KEY, &valid);
+    err = nvs_open(NVS_CONFIGURATION_NAMESPACE, NVS_READONLY, &nvs_handle);
+    err = nvs_get_str(nvs_handle, NVS_CREDENTIALS_SSID_KEY, NULL, &length);
     
     if (err == ESP_ERR_NVS_NOT_FOUND) { //first time, we need to store default data
-        nvs_set_u8(nvs_handle, NVS_CREDENTIALS_VALID_KEY, NVS_CREDENTIALS_NOT_VALID);
-        nvs_commit(nvs_handle);
-        credentials->valid = false;
-        credentials->password = NULL;
-        credentials->ssid = NULL;
+        return false;
     }
-    else if (err == ESP_OK) {
-        credentials->valid = valid == NVS_CREDENTIALS_VALID ? true : false;
-    }
-    
-    if (credentials->valid) {
-        nvs_get_str(nvs_handle, NVS_CREDENTIALS_SSID_KEY, NULL, &length);
-        credentials->ssid = malloc(length);
-        nvs_get_str(nvs_handle, NVS_CREDENTIALS_SSID_KEY, credentials->ssid, &length);
 
-        nvs_get_str(nvs_handle, NVS_CREDENTIALS_PASSWORD_KEY, NULL, &length);
-        credentials->password = malloc(length);
-        nvs_get_str(nvs_handle, NVS_CREDENTIALS_PASSWORD_KEY, credentials->password, &length);
-        printf("[storage]: ssid: %s password %s\n", credentials->ssid, credentials->password);
-    } 
-    else {
-        printf("[storage]: no valid credentials\n");
-    }
+    credentials->ssid = malloc(length);
+    nvs_get_str(nvs_handle, NVS_CREDENTIALS_SSID_KEY, credentials->ssid, &length);
+
+    nvs_get_str(nvs_handle, NVS_CREDENTIALS_PASSWORD_KEY, NULL, &length);
+    credentials->password = malloc(length);
+    nvs_get_str(nvs_handle, NVS_CREDENTIALS_PASSWORD_KEY, credentials->password, &length);
     nvs_close(nvs_handle);
+    return true;
+}
+
+void storage_delete_credentials(void) {
+    nvs_handle_t nvs_handle;
+    esp_err_t err;
+    err = nvs_open(NVS_CONFIGURATION_NAMESPACE, NVS_READWRITE, &nvs_handle);
+
+    nvs_erase_key(nvs_handle, NVS_CREDENTIALS_SSID_KEY);
+    nvs_erase_key(nvs_handle, NVS_CREDENTIALS_PASSWORD_KEY);
+    nvs_commit(nvs_handle);
+    nvs_close(nvs_handle);
+    
 }
 
 void storage_set_credentials(nvs_credentials_t *credentials) {
     nvs_handle_t nvs_handle;
     esp_err_t err;
-    uint8_t valid = credentials->valid ? NVS_CREDENTIALS_VALID : NVS_CREDENTIALS_NOT_VALID;
     err = nvs_open(NVS_CONFIGURATION_NAMESPACE, NVS_READWRITE, &nvs_handle);
 
-    nvs_set_u8(nvs_handle, NVS_CREDENTIALS_VALID_KEY, valid);
     nvs_set_str(nvs_handle, NVS_CREDENTIALS_SSID_KEY, credentials->ssid);
     nvs_set_str(nvs_handle, NVS_CREDENTIALS_PASSWORD_KEY, credentials->password);
 
@@ -129,14 +127,14 @@ void storage_get_ap_credentials(nvs_ap_credentials_t *ap_credentials) {
     esp_err_t err;
     size_t length;
 
-    err = nvs_open(NVS_CONFIGURATION_NAMESPACE, NVS_READWRITE, &nvs_handle);
+    err = nvs_open(NVS_CONFIGURATION_NAMESPACE, NVS_READONLY, &nvs_handle);
     err = nvs_get_str(nvs_handle, NVS_AP_CREDENTIALS_SSID_KEY, NULL, &length);
 
     if (err == ESP_ERR_NVS_NOT_FOUND) { //first time, we need to store default data
         nvs_ap_credentials_t default_ap_credentials;
         default_ap_credentials.ssid = malloc(strlen("powerbutton-ap") + 1);
         default_ap_credentials.password = malloc(strlen("12345678") + 1);
-        storage_set_ap_credentials(&default_ap_credentials);
+        // storage_set_ap_credentials(&default_ap_credentials); //no need to store it? Also we would be opening two handles, is that ok?
 
         //copy data and return it
         ap_credentials->ssid = default_ap_credentials.ssid;
@@ -167,6 +165,7 @@ bool storage_get_action(nvs_action_t *action, uint8_t action_id) {
     err = nvs_get_u8(nvs_handle, string, &valid);
 
     if (err == ESP_ERR_NVS_NOT_FOUND) {
+        nvs_close(nvs_handle);
         return false;
     }
 
@@ -259,6 +258,55 @@ void storage_set_action(nvs_action_t *action, uint8_t action_id) {
         sprintf(string, "%s%u-%u", NVS_ACTIONS_HEADER_VALUE_KEY, action_id, i);
         nvs_set_str(nvs_handle, string, action->header_values[i]);
     }
+    nvs_commit(nvs_handle);
+    nvs_close(nvs_handle);
+}
+
+void storage_delete_action(uint8_t action_id) {
+    nvs_handle_t nvs_handle;
+    char string[20];
+    nvs_open(NVS_ACTIONS_NAMESPACE, NVS_READWRITE, &nvs_handle);
+    sprintf(string, "%s%u", NVS_ACTIONS_VALID_KEY, action_id);
+    nvs_erase_key(nvs_handle, string);
+    nvs_commit(nvs_handle);
+    nvs_close(nvs_handle);
+}
+
+
+bool storage_get_should_start_configuration_server(void) {
+    nvs_handle_t nvs_handle;
+    esp_err_t err;
+    uint8_t value;
+
+    err = nvs_open(NVS_CONFIGURATION_NAMESPACE, NVS_READONLY, &nvs_handle);
+    err = nvs_get_u8(nvs_handle, NVS_SHOULD_CONFIGURE_KEY, &value);
+
+    nvs_close(nvs_handle);
+
+    if (err == ESP_ERR_NVS_NOT_FOUND) {
+        return false;
+    }
+
+    return value ? true : false;
+}
+
+void storage_set_should_start_configuration_server(bool should) {
+    nvs_handle_t nvs_handle;
+    nvs_open(NVS_CONFIGURATION_NAMESPACE, NVS_READWRITE, &nvs_handle);
+    nvs_set_u8(nvs_handle, NVS_SHOULD_CONFIGURE_KEY, should ? 1 : 0);
+    nvs_commit(nvs_handle);
+    nvs_close(nvs_handle);
+}
+
+void storage_erase_all(void) {
+    nvs_handle_t nvs_handle;
+    nvs_open(NVS_ACTIONS_NAMESPACE, NVS_READWRITE, &nvs_handle);
+    nvs_erase_all(nvs_handle);
+    nvs_commit(nvs_handle);
+    nvs_close(nvs_handle);
+
+    nvs_open(NVS_CONFIGURATION_NAMESPACE, NVS_READWRITE, &nvs_handle);
+    nvs_erase_all(nvs_handle);
     nvs_commit(nvs_handle);
     nvs_close(nvs_handle);
 }

@@ -9,7 +9,6 @@ typedef struct {
 } nvs_configuration_t;
 
 typedef struct {
-    bool valid;
     char *ssid;
     char *password;
 } nvs_credentials_t;
@@ -32,12 +31,17 @@ typedef struct {
     uint8_t color;
 } nvs_action_t;
 
-void storage_get_credentials(nvs_credentials_t *credentials);
+bool storage_get_credentials(nvs_credentials_t *credentials);
 void storage_set_credentials(nvs_credentials_t *credentials);
+void storage_delete_credentials(void);
 void storage_get_configuration(nvs_configuration_t *configuration);
 void storage_set_configuration(nvs_configuration_t *configuration);
 void storage_set_ap_credentials(nvs_ap_credentials_t *ap_credentials);
 void storage_get_ap_credentials(nvs_ap_credentials_t *ap_credentials);
 void storage_set_action(nvs_action_t *action, uint8_t action_id);
 bool storage_get_action(nvs_action_t *action, uint8_t action_id);
+void storage_delete_action(uint8_t action_id);
+bool storage_get_should_start_configuration_server(void);
+void storage_set_should_start_configuration_server(bool should);
+void storage_erase_all(void);
 void storage_init(void);
