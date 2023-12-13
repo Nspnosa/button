@@ -12,6 +12,7 @@
 #include "string.h"
 #include "http.h"
 #include "storage.h"
+#include "wifi.h"
 
 void printing_function(void *arg) {
     int *value = (int *) arg;
@@ -26,6 +27,7 @@ void other_printing_function(void *arg) {
 }
 
 void start_server(void *arg) {
+    wifi_ap_start("ap-powerbutton", "12345678");
     configuration_server_start();   
 }
 
@@ -52,6 +54,8 @@ void app_main() {
     // }
 
     storage_init();
+    wifi_init();
+
     nvs_configuration_t configuration;
     nvs_credentials_t credentials;
     storage_get_configuration(&configuration);

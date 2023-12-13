@@ -17,6 +17,7 @@
 #include "storage.h"
 #include "cJSON.h"
 #include "cJSON_validator.h"
+#include "wifi.h"
 // extern const uint8_t index_html_start[] asm("_binary_index_html_start");
 // extern const uint8_t index_html_end[]   asm("_binary_index_html_end");
 // extern const uint8_t home_html_start[] asm("_binary_home_html_start");
@@ -39,72 +40,6 @@ wifi
     login credentials
     ap credentials
 */
-
-#define EXAMPLE_ESP_WIFI_SSID      "powerbutton-ap" 
-#define EXAMPLE_ESP_WIFI_PASS       "12345678" 
-#define EXAMPLE_ESP_WIFI_CHANNEL   10
-#define EXAMPLE_MAX_STA_CONN       1
-
-static const char *TAG = "wifi softAP";
-
-static void wifi_event_handler(void* arg, esp_event_base_t event_base,
-                                    int32_t event_id, void* event_data)
-{
-    if (event_id == WIFI_EVENT_AP_STACONNECTED) {
-        wifi_event_ap_staconnected_t* event = (wifi_event_ap_staconnected_t*) event_data;
-        ESP_LOGI(TAG, "station "MACSTR" join, AID=%d",
-                 MAC2STR(event->mac), event->aid);
-    } else if (event_id == WIFI_EVENT_AP_STADISCONNECTED) {
-        wifi_event_ap_stadisconnected_t* event = (wifi_event_ap_stadisconnected_t*) event_data;
-        ESP_LOGI(TAG, "station "MACSTR" leave, AID=%d",
-                 MAC2STR(event->mac), event->aid);
-    }
-}
-
-void wifi_init_softap(void)
-{
-    ESP_ERROR_CHECK(esp_netif_init());
-    ESP_ERROR_CHECK(esp_event_loop_create_default());
-    esp_netif_create_default_wifi_ap();
-
-    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-    ESP_ERROR_CHECK(esp_wifi_init(&cfg));
-
-    ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT,
-                                                        ESP_EVENT_ANY_ID,
-                                                        &wifi_event_handler,
-                                                        NULL,
-                                                        NULL));
-
-    wifi_config_t wifi_config = {
-        .ap = {
-            .ssid = EXAMPLE_ESP_WIFI_SSID,
-            .ssid_len = strlen(EXAMPLE_ESP_WIFI_SSID),
-            .channel = EXAMPLE_ESP_WIFI_CHANNEL,
-            .password = EXAMPLE_ESP_WIFI_PASS,
-            .max_connection = EXAMPLE_MAX_STA_CONN,
-#ifdef CONFIG_ESP_WIFI_SOFTAP_SAE_SUPPORT
-            .authmode = WIFI_AUTH_WPA3_PSK,
-            .sae_pwe_h2e = WPA3_SAE_PWE_BOTH,
-#else /* CONFIG_ESP_WIFI_SOFTAP_SAE_SUPPORT */
-            .authmode = WIFI_AUTH_WPA2_PSK,
-#endif
-            .pmf_cfg = {
-                    .required = true,
-            },
-        },
-    };
-    if (strlen(EXAMPLE_ESP_WIFI_PASS) == 0) {
-        wifi_config.ap.authmode = WIFI_AUTH_OPEN;
-    }
-
-    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_AP));
-    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &wifi_config));
-    ESP_ERROR_CHECK(esp_wifi_start());
-
-    ESP_LOGI(TAG, "wifi_init_softap finished. SSID:%s password:%s channel:%d",
-             EXAMPLE_ESP_WIFI_SSID, EXAMPLE_ESP_WIFI_PASS, EXAMPLE_ESP_WIFI_CHANNEL);
-}
 
 esp_err_t configuration_server_configuration_get(httpd_req_t *req);
 esp_err_t configuration_server_configuration_set(httpd_req_t *req);
@@ -295,35 +230,32 @@ esp_err_t configuration_server_credentials_set(httpd_req_t *req) {
     return ESP_OK;
 }
 
-char ** fake_access_point_scan(uint8_t *elements) {
-    *elements = 4;
-    char **result = malloc(sizeof(char *) * (*elements));
-    for (uint8_t i = 0; i < *elements; i++) {
-        result[i] = malloc((sizeof("SSID ID ")) + 3);
-        sprintf(result[i], "SSID ID %u", i);
-    }
-    return result;
-}
-
 esp_err_t configuration_server_ap_get(httpd_req_t *req) {
 
     uint8_t count;
-    char **result = fake_access_point_scan(&count);
+    wifi_ap_record_t *scan_result = wifi_sta_scan(&count);
     cJSON *ssid_object = cJSON_CreateObject();
-    cJSON *ssid_list = cJSON_CreateStringArray(result, count);
-    cJSON_AddItemToObject(ssid_object, "ssidList", ssid_list);
+    cJSON *ssid_array = cJSON_CreateArray();
+
+    for (uint16_t i = 0; i < count; i++) {
+        cJSON *entry_json = cJSON_CreateObject();
+        cJSON *ssid_json = cJSON_CreateString((char *)scan_result[i].ssid);
+        cJSON *rssi_json = cJSON_CreateNumber(scan_result[i].rssi);
+        cJSON *security_json = cJSON_CreateNumber((uint32_t) scan_result[i].authmode);
+        cJSON_AddItemToObject(entry_json, "ssid", ssid_json);
+        cJSON_AddItemToObject(entry_json, "rssi", rssi_json);
+        cJSON_AddItemToObject(entry_json, "security", security_json);
+        cJSON_AddItemToArray(ssid_array, entry_json);
+    }
+
+    cJSON_AddItemToObject(ssid_object, "apList", ssid_array);
     char *string = cJSON_Print(ssid_object);
 
     httpd_resp_send(req, string, HTTPD_RESP_USE_STRLEN);
-
-    //free ssid results
-    for (uint8_t i = 0; i < count; i++) {
-        free(result[i]);
-    }
-    free(result);
+    printf("%s\n", string);
 
     cJSON_Delete(ssid_object);
-    free(string);
+    free(scan_result);
     return ESP_OK;    
 }
 
@@ -671,9 +603,6 @@ esp_err_t configuration_server_server_credentials_set(httpd_req_t *req) {
 }
 
 void configuration_server_start(void) {
-
-    // nvs_flash_init();
-    wifi_init_softap();
 
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.max_uri_handlers = 15;

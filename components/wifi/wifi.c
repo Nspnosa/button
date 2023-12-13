@@ -35,18 +35,16 @@ bool wifi_connected(void) {
     return wifi_sta_connected;
 }
 
-void wifi_sta_scan(char **scan, uint16_t *count) {
+wifi_ap_record_t *wifi_sta_scan(uint16_t *count) {
     esp_wifi_scan_start(NULL, true);
-    uint16_t ap_count = 0;
-    esp_wifi_scan_get_ap_records(&ap_count, NULL);
-    wifi_ap_record_t *records = malloc(sizeof(wifi_ap_record_t) * ap_count);
-    esp_wifi_scan_get_ap_records(&ap_count, records);
-    scan = malloc(sizeof(char *) * ap_count);
-    *count = ap_count;
-    for (uint8_t i = 0; i < ap_count; i++) {
-        scan[i] = malloc(strlen((char *) records[i].ssid) + 1);
-        strcpy((char *) &scan[i], (char *) records[i].ssid);
-    }
+
+    uint16_t record_cnt;
+    esp_wifi_scan_get_ap_num(&record_cnt);
+    wifi_ap_record_t *records = malloc(sizeof(wifi_ap_record_t) * record_cnt);
+
+    esp_wifi_scan_get_ap_records(&record_cnt, records);
+    *count = record_cnt;
+    return records;
 }
 
 void wifi_init(void) {
@@ -63,15 +61,12 @@ void wifi_sta_start(char *ssid, char *password) {
     esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL, NULL);
     esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &wifi_event_handler, NULL, NULL);
 
-    wifi_config_t wifi_config = {
-        .sta = {
-            .ssid = (uint8_t) ssid,
-            .password = (uint8_t) password,
-            .threshold.authmode = WIFI_AUTH_OPEN,
-            .sae_pwe_h2e = WPA3_SAE_PWE_UNSPECIFIED,
-            .sae_h2e_identifier = "",
-        },
-    };
+    wifi_config_t wifi_config = {0};
+    strcpy((char *) wifi_config.sta.ssid, ssid);
+    strcpy((char *) wifi_config.sta.password, password);
+    wifi_config.sta.threshold.authmode = WIFI_AUTH_OPEN;
+    wifi_config.sta.sae_pwe_h2e = WPA3_SAE_PWE_UNSPECIFIED;
+    strcpy((char *) wifi_config.sta.sae_h2e_identifier, "");
 
     esp_wifi_set_mode(WIFI_MODE_STA);
     esp_wifi_set_config(WIFI_IF_STA, &wifi_config);
@@ -87,19 +82,15 @@ void wifi_ap_start(char *ssid, char *password) {
     esp_wifi_set_mode(WIFI_MODE_APSTA);
 
     esp_netif_create_default_wifi_ap();
-    wifi_config_t wifi_ap_config = {
-        .ap = {
-            .ssid = (uint8_t *) ssid,
-            .ssid_len = strlen(ssid),
-            .channel = 11,
-            .password = (uint8_t *) password,
-            .max_connection = 1,
-            .authmode = WIFI_AUTH_WPA2_PSK,
-            .pmf_cfg = {
-                .required = false,
-            },
-        },
-    };
+    wifi_config_t wifi_ap_config = {0};
+
+    memcpy(wifi_ap_config.ap.ssid, ssid, strlen(ssid));
+    strcpy((char *) wifi_ap_config.ap.password, password);
+    wifi_ap_config.ap.ssid_len = strlen(ssid);
+    wifi_ap_config.ap.channel = 11;
+    wifi_ap_config.ap.max_connection = 1;
+    wifi_ap_config.ap.authmode = WIFI_AUTH_WPA2_PSK;
+    wifi_ap_config.ap.pmf_cfg.required = true;
 
     if (strlen(password) == 0) {
         wifi_ap_config.ap.authmode = WIFI_AUTH_OPEN;
@@ -114,7 +105,7 @@ void wifi_ap_start(char *ssid, char *password) {
             .password = "",
             .scan_method = WIFI_ALL_CHANNEL_SCAN,
             .failure_retry_cnt = 10,
-            .threshold.authmode = ESP_WIFI_SCAN_AUTH_MODE_THRESHOLD,
+            .threshold.authmode = WIFI_AUTH_OPEN,
             .sae_pwe_h2e = WPA3_SAE_PWE_BOTH,
         },
     };
