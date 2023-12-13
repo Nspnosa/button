@@ -14,72 +14,56 @@
 #include "storage.h"
 #include "wifi.h"
 
-void printing_function(void *arg) {
-    int *value = (int *) arg;
-    printf("current value is %i\n", *value);
-    *value = *value + 1;
+void factory_restore(void *params) {
+    storage_erase_all();
 }
 
-void other_printing_function(void *arg) {
-    int *value = (int *) arg;
-    printf("current other value is %i\n", *value);
-    *value = *value + 1;
+void start_server(void *params) {
+    storage_set_should_start_configuration_server(true);
+    esp_restart();
 }
 
-void start_server(void *arg) {
-    wifi_ap_start("ap-powerbutton", "12345678");
-    configuration_server_start();   
-}
-
-void wait_forever(void) {
-    for(;;) {
-        vTaskDelay(pdMS_TO_TICKS(1000));
-    }
-}
 
 void app_main() {
-    // nvs_credentials_t credentials;
-    // storage_init();
-    // bool should_start_configuration = storage_get_should_start_configuration_server();
-    // bool credentials_exist = storage_get_credentials(&credentials);
-
-    //TODO: Should also probably start server if no action has been saved
-    // if (should_start_configuration || !credentials_exist) { //if configuration requested by user or no credentials
-    //    nvs_ap_credentials_t ap_credentials
-    //    storage_get_ap_credentials(&ap_credentials);
-    //    wifi_ap_start(ap_credentials.ssid, ap_credentials.password);
-    //    configuration_server_start();
-    //    storage_set_should_start_configuration_server(false);
-    //    wait_forever();
-    // }
-
+    nvs_credentials_t credentials;
     storage_init();
     wifi_init();
 
-    nvs_configuration_t configuration;
-    nvs_credentials_t credentials;
-    storage_get_configuration(&configuration);
-    printf("[main]: data read debounce_ms: %i, long_press_ms: %i, action_delay_ms %i\n", configuration.debounce_ms, configuration.long_press_ms, configuration.action_delay_ms);
-
+    bool should_start_configuration = storage_get_should_start_configuration_server();
     bool credentials_exist = storage_get_credentials(&credentials);
-    if (credentials_exist) {
-        printf("[main]: credentials stored ssid: [%s] password: [%s]\n", credentials.ssid, credentials.password);
-    } else {
-        printf("[main]: no valid credentials stored\n");
+
+    if (should_start_configuration || !credentials_exist) { //if configuration requested by user or no credentials
+        nvs_ap_credentials_t ap_credentials;
+        storage_get_ap_credentials(&ap_credentials);
+        wifi_ap_start(ap_credentials.ssid, ap_credentials.password);
+        configuration_server_start();
+        storage_set_should_start_configuration_server(false);
+        printf("[MAIN]: Waiting forever!\n");
+        while (true) {
+            vTaskDelay(pdMS_TO_TICKS(1000));
+        }
     }
 
-    button_t my_button;
-    power_button_t my_power_button;
-    power_button_press_t configuration_server_pattern[1] = {PRESS};
-    int counter1 = 0;
-    int counter2 = 0;
+    button_t button;
+    power_button_t power_button;
+    power_button_press_t configuration_server_start_pattern[6] = {PRESS, PRESS, PRESS, PRESS, PRESS, LONG_PRESS};
+    power_button_press_t factory_restore_pattern[7] = {PRESS, PRESS, PRESS, PRESS, PRESS, PRESS, LONG_PRESS};
+    nvs_configuration_t configuration;
 
     button_init(1);
-    button_configure(0, PULL_UP, configuration.debounce_ms, false, &my_button);
-    power_button_configure(&my_button, &my_power_button, configuration.long_press_ms, configuration.action_delay_ms);
-    power_button_add_action(&my_power_button, configuration_server_pattern, 1, start_server, NULL);
+    button_configure(0, PULL_UP, configuration.debounce_ms, false, &button);
+    power_button_configure(&button, &power_button, configuration.long_press_ms, configuration.action_delay_ms);
+    power_button_add_action(&power_button, configuration_server_start_pattern, 6, start_server, NULL);
+    power_button_add_action(&power_button, factory_restore_pattern, 7, factory_restore, NULL);
 
-    while (1) {
-        vTaskDelay(1000);
+    //TODO: add the rest of the configured actions if any
+    //TODO: add device ID in the request as a header
+    //TODO: add the pattern to the body of the request?
+    //TODO: add LED component.
+
+    storage_get_configuration(&configuration);
+
+    while (true) {
+        vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }

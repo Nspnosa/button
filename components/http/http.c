@@ -49,6 +49,7 @@ esp_err_t configuration_server_credentials_delete(httpd_req_t *req);
 esp_err_t configuration_server_actions_get(httpd_req_t *req);
 esp_err_t configuration_server_actions_set(httpd_req_t *req);
 esp_err_t configuration_server_actions_delete(httpd_req_t *req);
+esp_err_t configuration_server_exit_get(httpd_req_t *req);
 
 //server access point credentials
 esp_err_t configuration_server_server_credentials_get(httpd_req_t *req);
@@ -63,6 +64,13 @@ httpd_uri_t configuration_server_uri_configuration_get = {
     .uri      = "/configuration/button",
     .method   = HTTP_GET,
     .handler  = configuration_server_configuration_get,
+    .user_ctx = NULL
+};
+
+httpd_uri_t configuration_server_uri_exit_get = {
+    .uri      = "/exit",
+    .method   = HTTP_GET,
+    .handler  = configuration_server_exit_get,
     .user_ctx = NULL
 };
 
@@ -232,7 +240,7 @@ esp_err_t configuration_server_credentials_set(httpd_req_t *req) {
 
 esp_err_t configuration_server_ap_get(httpd_req_t *req) {
 
-    uint8_t count;
+    uint16_t count;
     wifi_ap_record_t *scan_result = wifi_sta_scan(&count);
     cJSON *ssid_object = cJSON_CreateObject();
     cJSON *ssid_array = cJSON_CreateArray();
@@ -545,6 +553,13 @@ esp_err_t configuration_server_actions_delete(httpd_req_t *req) {
     return ESP_OK;
 }
 
+esp_err_t configuration_server_exit_get(httpd_req_t *req) {
+    uint8_t expected_size = sizeof("/exit") - 1;
+    httpd_resp_send(req, "OK", HTTPD_RESP_USE_STRLEN);
+    esp_restart();
+    return ESP_OK;
+}
+
 //TODO: allow users to factory reset to return these values to their original state
 
 esp_err_t configuration_server_server_credentials_get(httpd_req_t *req) {
@@ -622,6 +637,7 @@ void configuration_server_start(void) {
         httpd_register_uri_handler(server, &configuration_server_uri_ap_connection_result_get);
         httpd_register_uri_handler(server, &configuration_server_uri_server_credentials_get);
         httpd_register_uri_handler(server, &configuration_server_uri_server_credentials_set);
+        httpd_register_uri_handler(server, &configuration_server_uri_exit_get);
     }
 }
 
