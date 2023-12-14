@@ -23,6 +23,10 @@ void start_server(void *params) {
     esp_restart();
 }
 
+void http_request_task(void *params) {
+    nvs_action_t *action = (nvs_action_t *) params;
+    printf("url: %s\n", action->url);
+}
 
 void app_main() {
     nvs_credentials_t credentials;
@@ -46,22 +50,35 @@ void app_main() {
 
     button_t button;
     power_button_t power_button;
-    power_button_press_t configuration_server_start_pattern[6] = {PRESS, PRESS, PRESS, PRESS, PRESS, LONG_PRESS};
-    power_button_press_t factory_restore_pattern[7] = {PRESS, PRESS, PRESS, PRESS, PRESS, PRESS, LONG_PRESS};
     nvs_configuration_t configuration;
 
+    storage_get_configuration(&configuration);
     button_init(1);
     button_configure(0, PULL_UP, configuration.debounce_ms, false, &button);
     power_button_configure(&button, &power_button, configuration.long_press_ms, configuration.action_delay_ms);
+
+    power_button_press_t configuration_server_start_pattern[6] = {PRESS, PRESS, PRESS, PRESS, PRESS, LONG_PRESS};
+    power_button_press_t factory_restore_pattern[7] = {PRESS, PRESS, PRESS, PRESS, PRESS, PRESS, LONG_PRESS};
     power_button_add_action(&power_button, configuration_server_start_pattern, 6, start_server, NULL);
     power_button_add_action(&power_button, factory_restore_pattern, 7, factory_restore, NULL);
 
-    //TODO: add the rest of the configured actions if any
+    for (uint8_t id = 0; id < 5; id++) {
+        nvs_action_t action[5];
+        bool available = storage_get_action(&action[id], id);
+
+        if (!available) continue;
+
+        if (action[id].valid) {
+            power_button_add_action(&power_button, action[id].pattern, action[id].pattern_size, http_request_task, &action[id]);
+        }
+    }
+
+    //TODO: Finish implementing http request task
     //TODO: add device ID in the request as a header
     //TODO: add the pattern to the body of the request?
     //TODO: add LED component.
-
-    storage_get_configuration(&configuration);
+    //TODO: sta+ap should only try a few times to connect after that it should fail?
+    //TODO: maybe add some sort of firmware update capability?
 
     while (true) {
         vTaskDelay(pdMS_TO_TICKS(1000));
