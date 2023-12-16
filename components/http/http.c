@@ -640,5 +640,3 @@ void configuration_server_start(void) {
         httpd_register_uri_handler(server, &configuration_server_uri_exit_get);
     }
 }
-
-//TODO: fix bugs in configuration_server_server_credentials_set & configuration_server_credentials_set

@@ -16,6 +16,7 @@
 
 void factory_restore(void *params) {
     storage_erase_all();
+    esp_restart();
 }
 
 void start_server(void *params) {
@@ -72,6 +73,8 @@ void app_main() {
             power_button_add_action(&power_button, action[id].pattern, action[id].pattern_size, http_request_task, &action[id]);
         }
     }
+
+    wifi_sta_start(credentials.ssid, credentials.password);
 
     //TODO: Finish implementing http request task
     //TODO: add device ID in the request as a header
