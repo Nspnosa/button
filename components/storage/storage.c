@@ -29,6 +29,7 @@
 #define NVS_ACTIONS_COLOR_KEY "action_c"
 #define NVS_ACTIONS_PATTERN_KEY "action_p"
 #define NVS_ACTIONS_HEADER_COUNT_KEY "action_hc"
+#define NVS_ACTIONS_METHOD_KEY "action_m"
 
 void storage_init(void) {
     nvs_flash_init();
@@ -217,6 +218,11 @@ bool storage_get_action(nvs_action_t *action, uint8_t action_id) {
     action->body = malloc(sizeof(char) * length);
     nvs_get_str(nvs_handle, string, action->body, &length);
 
+    sprintf(string, "%s%u", NVS_ACTIONS_METHOD_KEY, action_id);
+    uint8_t method_temp = 0; 
+    nvs_get_u8(nvs_handle, string, &method_temp);
+    action->method = method_temp == 0 ? METHOD_GET : METHOD_POST;
+
     nvs_close(nvs_handle);
     return true;
 }
@@ -241,6 +247,9 @@ void storage_set_action(nvs_action_t *action, uint8_t action_id) {
 
     sprintf(string, "%s%u", NVS_ACTIONS_BODY_KEY, action_id);
     nvs_set_str(nvs_handle, string, action->body);
+
+    sprintf(string, "%s%u", NVS_ACTIONS_METHOD_KEY, action_id);
+    nvs_set_u8(nvs_handle, string, action->method == METHOD_GET ? 0 : 1);
 
     uint8_t pattern[action->pattern_size];
     for (uint8_t i = 0; i < action->pattern_size; i++) {

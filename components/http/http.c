@@ -375,6 +375,7 @@ void configuration_server_actions_response(httpd_req_t *req, uint8_t id) {
     cJSON_AddStringToObject(action_json, "url", action.url);
     cJSON_AddNumberToObject(action_json, "color", action.color);
     cJSON_AddStringToObject(action_json, "body", action.body);
+    cJSON_AddStringToObject(action_json, "method", action.method == METHOD_GET ? "GET" : "POST");
 
     for (int i = 0; i < action.pattern_size; i++) {
         char *press_type = action.pattern[i] == PRESS ? "PRESS" : "LONG_PRESS";
@@ -432,8 +433,8 @@ esp_err_t configuration_server_actions_set(httpd_req_t *req) {
     json_validator_init(content, &validator, NULL);
     json_validator_object_not_empty(&validator, NULL);
 
-    char *array_of_keys[] = {"actionID", "valid", "name", "pattern", "url", "body", "headers", "color"};
-    json_validator_contains_only(&validator, array_of_keys, 8, NULL); //verify that the object has only one of these keys
+    char *array_of_keys[] = {"actionID", "valid", "name", "pattern", "url", "body", "headers", "color", "method"};
+    json_validator_contains_only(&validator, array_of_keys, 9, NULL); //verify that the object has only one of these keys
 
     if (!validator.valid) { //not valid return error
         configuration_server_report_json_error(req, HTTPD_400_BAD_REQUEST, validator.error_message);
@@ -447,12 +448,24 @@ esp_err_t configuration_server_actions_set(httpd_req_t *req) {
     json_validator_key_is_array(&validator, "pattern", NULL);
     json_validator_key_is_string_with_size_between(&validator, "url", 5, 300, "url should be a string between 5 and 300 characters long");
 
+    json_validator_key_is_string_with_size_between(&validator, "method", 3, 4, "method should be POST or GET");
     json_validator_key_is_string(&validator, "body", NULL);  //body has to be a string
     json_validator_key_is_object(&validator, "headers", NULL); //headers have to be an object
     json_validator_key_is_integer_between(&validator, "color", 1, 10, "color should an integer between 1 and 10");
 
     if (!validator.valid) { //not valid return error
         configuration_server_report_json_error(req, HTTPD_400_BAD_REQUEST, validator.error_message);
+        json_validator_delete(&validator);
+        return ESP_OK;
+    }
+
+    //make sure that we are only dealing with post or get methods
+    cJSON *method_json = cJSON_GetObjectItemCaseSensitive(validator.json, "method");
+    bool method_is_post = strcmp(method_json->valuestring, "POST") == 0;
+    bool method_is_get = strcmp(method_json->valuestring, "GET") == 0;
+
+    if ((!method_is_get) && (!method_is_post)) {
+        configuration_server_report_json_error(req, HTTPD_400_BAD_REQUEST, "method should be POST or GET");
         json_validator_delete(&validator);
         return ESP_OK;
     }
@@ -465,6 +478,7 @@ esp_err_t configuration_server_actions_set(httpd_req_t *req) {
     action.header_keys = malloc(sizeof(char *) * header_cnt);
     action.header_values = malloc(sizeof(char *) * header_cnt);
     action.header_count = header_cnt;
+    action.method = method_is_get ? METHOD_GET : METHOD_POST;
 
     uint8_t i = 0;
     cJSON *current_element = NULL;

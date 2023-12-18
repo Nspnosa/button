@@ -76,6 +76,7 @@ void app_main() {
 
     wifi_sta_start(credentials.ssid, credentials.password);
 
+    //TODO: Add method to the http request, post or get for now!
     //TODO: Finish implementing http request task
     //TODO: add device ID in the request as a header
     //TODO: add the pattern to the body of the request?

@@ -2,6 +2,11 @@
 #include <stdbool.h>
 #include "powerbutton.h" //only adding power button here to have the press type available
 
+typedef enum {
+    METHOD_POST,
+    METHOD_GET,
+} nvs_http_method_t;
+
 typedef struct {
     uint16_t debounce_ms;
     uint16_t long_press_ms;
@@ -29,6 +34,7 @@ typedef struct {
     char **header_values;
     uint8_t header_count;
     uint8_t color;
+    nvs_http_method_t method;
 } nvs_action_t;
 
 bool storage_get_credentials(nvs_credentials_t *credentials);
