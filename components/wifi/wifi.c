@@ -89,7 +89,7 @@ void wifi_ap_start(char *ssid, char *password) {
     wifi_ap_config.ap.ssid_len = strlen(ssid);
     wifi_ap_config.ap.channel = 11;
     wifi_ap_config.ap.max_connection = 1;
-    wifi_ap_config.ap.authmode = WIFI_AUTH_WPA2_PSK;
+    wifi_ap_config.ap.authmode = WIFI_AUTH_WPA3_PSK;
     wifi_ap_config.ap.pmf_cfg.required = true;
 
     if (strlen(password) == 0) {

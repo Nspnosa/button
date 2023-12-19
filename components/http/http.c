@@ -18,16 +18,17 @@
 #include "cJSON.h"
 #include "cJSON_validator.h"
 #include "wifi.h"
-// extern const uint8_t index_html_start[] asm("_binary_index_html_start");
-// extern const uint8_t index_html_end[]   asm("_binary_index_html_end");
-// extern const uint8_t home_html_start[] asm("_binary_home_html_start");
-// extern const uint8_t home_html_end[]   asm("_binary_home_html_end");
-// extern const uint8_t about_html_start[] asm("_binary_about_html_start");
-// extern const uint8_t about_html_end[]   asm("_binary_about_html_end");
-// extern const uint8_t script_js_start[] asm("_binary_script_js_start");
-// extern const uint8_t script_js_end[]   asm("_binary_script_js_end");
-// extern const uint8_t styles_css_start[] asm("_binary_styles_css_start");
-// extern const uint8_t styles_css_end[]   asm("_binary_styles_css_end");
+
+extern const uint8_t index_html_start[] asm("_binary_index_html_start");
+extern const uint8_t index_html_end[]   asm("_binary_index_html_end");
+extern const uint8_t home_html_start[] asm("_binary_home_html_start");
+extern const uint8_t home_html_end[]   asm("_binary_home_html_end");
+extern const uint8_t about_html_start[] asm("_binary_about_html_start");
+extern const uint8_t about_html_end[]   asm("_binary_about_html_end");
+extern const uint8_t script_js_start[] asm("_binary_script_js_start");
+extern const uint8_t script_js_end[]   asm("_binary_script_js_end");
+extern const uint8_t styles_css_start[] asm("_binary_styles_css_start");
+extern const uint8_t styles_css_end[]   asm("_binary_styles_css_end");
 
 /*
 button configuration
@@ -267,12 +268,8 @@ esp_err_t configuration_server_ap_get(httpd_req_t *req) {
     return ESP_OK;    
 }
 
-bool fake_connection_failed_or_succeded(void) {
-    return true;
-}
-
 esp_err_t configuration_server_ap_connection_result_get(httpd_req_t *req) {
-    bool connected = fake_connection_failed_or_succeded();
+    bool connected = wifi_connected();
     cJSON *response = cJSON_CreateObject();
     cJSON_AddBoolToObject(response, "connectionSuccessful", connected);
     char *string = cJSON_Print(response);

@@ -39,7 +39,6 @@ bool storage_get_credentials(nvs_credentials_t *credentials) {
     nvs_handle_t nvs_handle;
     esp_err_t err;
     size_t length;
-    uint8_t valid;
 
     err = nvs_open(NVS_CONFIGURATION_NAMESPACE, NVS_READONLY, &nvs_handle);
     err = nvs_get_str(nvs_handle, NVS_CREDENTIALS_SSID_KEY, NULL, &length);
@@ -135,6 +134,8 @@ void storage_get_ap_credentials(nvs_ap_credentials_t *ap_credentials) {
         nvs_ap_credentials_t default_ap_credentials;
         default_ap_credentials.ssid = malloc(strlen("powerbutton-ap") + 1);
         default_ap_credentials.password = malloc(strlen("12345678") + 1);
+        strcpy(default_ap_credentials.ssid, "powerbutton-ap");
+        strcpy(default_ap_credentials.password, "12345678");
         // storage_set_ap_credentials(&default_ap_credentials); //no need to store it? Also we would be opening two handles, is that ok?
 
         //copy data and return it

@@ -40,6 +40,7 @@ void app_main() {
     if (should_start_configuration || !credentials_exist) { //if configuration requested by user or no credentials
         nvs_ap_credentials_t ap_credentials;
         storage_get_ap_credentials(&ap_credentials);
+        printf("[MAIN]: credentials %s, %s!\n", ap_credentials.ssid, ap_credentials.password);
         wifi_ap_start(ap_credentials.ssid, ap_credentials.password);
         configuration_server_start();
         storage_set_should_start_configuration_server(false);
