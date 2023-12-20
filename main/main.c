@@ -33,6 +33,7 @@ void app_main() {
     nvs_credentials_t credentials;
     storage_init();
     wifi_init();
+    storage_erase_all();
 
     bool should_start_configuration = storage_get_should_start_configuration_server();
     bool credentials_exist = storage_get_credentials(&credentials);

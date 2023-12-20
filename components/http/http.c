@@ -42,6 +42,12 @@ wifi
     ap credentials
 */
 
+esp_err_t configuration_server_index_get(httpd_req_t *req);
+esp_err_t configuration_server_script_get(httpd_req_t *req);
+esp_err_t configuration_server_css_get(httpd_req_t *req);
+esp_err_t configuration_server_about_get(httpd_req_t *req);
+esp_err_t configuration_server_home_get(httpd_req_t *req);
+
 esp_err_t configuration_server_configuration_get(httpd_req_t *req);
 esp_err_t configuration_server_configuration_set(httpd_req_t *req);
 esp_err_t configuration_server_credentials_get(httpd_req_t *req);
@@ -59,6 +65,72 @@ esp_err_t configuration_server_server_credentials_set(httpd_req_t *req);
 //wifi connection
 esp_err_t configuration_server_ap_get(httpd_req_t *req);
 esp_err_t configuration_server_ap_connection_result_get(httpd_req_t *req);
+
+esp_err_t configuration_server_index(httpd_req_t *req);
+esp_err_t configuration_server_styles(httpd_req_t *req);
+esp_err_t configuration_server_script(httpd_req_t *req);
+esp_err_t configuration_server_home(httpd_req_t *req);
+esp_err_t configuration_server_about(httpd_req_t *req);
+
+httpd_uri_t configuration_server_uri_index = {
+    .uri      = "/index.html",
+    .method   = HTTP_GET,
+    .handler  = configuration_server_index,
+    .user_ctx = NULL
+};
+
+httpd_uri_t configuration_server_uri_styles = {
+    .uri      = "/styles.css",
+    .method   = HTTP_GET,
+    .handler  = configuration_server_styles,
+    .user_ctx = NULL
+};
+
+httpd_uri_t configuration_server_uri_home = {
+    .uri      = "/home.html",
+    .method   = HTTP_GET,
+    .handler  = configuration_server_home,
+    .user_ctx = NULL
+};
+
+httpd_uri_t configuration_server_uri_about = {
+    .uri      = "/about.html",
+    .method   = HTTP_GET,
+    .handler  = configuration_server_about,
+    .user_ctx = NULL
+};
+
+httpd_uri_t configuration_server_uri_script = {
+    .uri      = "/script.js",
+    .method   = HTTP_GET,
+    .handler  = configuration_server_script,
+    .user_ctx = NULL
+};
+
+esp_err_t configuration_server_index(httpd_req_t *req) {
+    httpd_resp_send(req, (const char *)index_html_start, index_html_end - index_html_start - 1);
+    return ESP_OK;
+}
+
+esp_err_t configuration_server_styles(httpd_req_t *req) {
+    httpd_resp_send(req, (const char *)styles_css_start, styles_css_end - styles_css_start - 1);
+    return ESP_OK;
+}
+
+esp_err_t configuration_server_script(httpd_req_t *req) {
+    httpd_resp_send(req, (const char *)script_js_start, script_js_end - script_js_start - 1);
+    return ESP_OK;
+}
+
+esp_err_t configuration_server_home(httpd_req_t *req) {
+    httpd_resp_send(req, (const char *)home_html_start, home_html_end - home_html_start - 1);
+    return ESP_OK;
+}
+
+esp_err_t configuration_server_about(httpd_req_t *req) {
+    httpd_resp_send(req, (const char *)about_html_start, about_html_end - about_html_start - 1);
+    return ESP_OK;
+}
 
 //get configuration
 httpd_uri_t configuration_server_uri_configuration_get = {
@@ -192,8 +264,12 @@ esp_err_t configuration_server_credentials_get(httpd_req_t *req) {
     //free memory
     cJSON_Delete(credentials_json);
     free(string);
-    free(credentials.ssid);
-    free(credentials.password);
+
+    if (exists) { //only free if values exist
+        free(credentials.ssid);
+        free(credentials.password);
+    }
+
     return ESP_OK;
 }
 
@@ -575,7 +651,7 @@ esp_err_t configuration_server_exit_get(httpd_req_t *req) {
 
 esp_err_t configuration_server_server_credentials_get(httpd_req_t *req) {
     nvs_ap_credentials_t ap_credentials;
-    storage_set_ap_credentials(&ap_credentials);
+    storage_get_ap_credentials(&ap_credentials);
 
     cJSON *ap_credentials_json = cJSON_CreateObject();
     cJSON *ssid = cJSON_CreateString(ap_credentials.ssid);
@@ -631,7 +707,7 @@ esp_err_t configuration_server_server_credentials_set(httpd_req_t *req) {
 void configuration_server_start(void) {
 
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
-    config.max_uri_handlers = 15;
+    config.max_uri_handlers = 20;
     config.uri_match_fn = httpd_uri_match_wildcard;
     httpd_handle_t server = NULL;
 
@@ -649,5 +725,10 @@ void configuration_server_start(void) {
         httpd_register_uri_handler(server, &configuration_server_uri_server_credentials_get);
         httpd_register_uri_handler(server, &configuration_server_uri_server_credentials_set);
         httpd_register_uri_handler(server, &configuration_server_uri_exit_get);
+        httpd_register_uri_handler(server, &configuration_server_uri_index);
+        httpd_register_uri_handler(server, &configuration_server_uri_styles);
+        httpd_register_uri_handler(server, &configuration_server_uri_script);
+        httpd_register_uri_handler(server, &configuration_server_uri_about);
+        httpd_register_uri_handler(server, &configuration_server_uri_home);
     }
 }

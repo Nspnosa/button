@@ -17,8 +17,8 @@ async function getConfiguration() {
 
 let actions = [];
 async function getActions() {
-    for (let i = 0; i < 5; i++) {
-        const response = await fetch(`/configuration/actions/${id}`);
+    for (let i = 1; i <= 5; i++) {
+        const response = await fetch(`/configuration/actions/${i}`);
         actions.push(await response.json());
     }
     console.log(actions);
