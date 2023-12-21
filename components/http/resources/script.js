@@ -3,7 +3,7 @@ function navigateTo(page) {
     fetch(`${page}.html`)
         .then(response => response.text())
         .then(html => {
-            document.getElementById('app').innerHTML = html;
+            document.getElementById('content-container').innerHTML = html;
         })
         .catch(error => console.error('Error fetching page:', error));
 }
@@ -53,6 +53,27 @@ async function getServerCredentials() {
 }
 
 window.onload = async (event) => {
+    // configuration = {
+    //     debounceMs : 10,
+    //     actionDelayMs : 500,
+    //     longPressMs : 300
+    // };
+
+    // actions = Array(5);
+    // for (let action of actions) {
+    //     action = {};
+    // }
+
+    // credentials = {
+    //     ssid: "anSSID",
+    //     password: "aPassword"
+    // };
+
+    // serverCredentials = {
+    //     ssid: "anSSID",
+    //     password: "aPassword"
+    // };
+
     await getConfiguration();
     await getActions();
     await getCredentials();

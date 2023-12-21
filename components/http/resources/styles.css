@@ -1,26 +1,45 @@
 /* Add your styles here */
+* {
+    box-sizing: border-box;
+}
+
 body {
     font-family: Arial, sans-serif;
     margin: 0;
     padding: 0;
+    width: 100%;
+    display: flex;
+    justify-content: center;
 }
 
-header {
-    background-color: #333;
-    color: #fff;
-    padding: 10px;
+#main-container {
+    display: flex;
+    /* width: 100vw; */
+    justify-content: center;
+    flex-direction: row;
+    box-shadow: rgba(0, 0, 0, 0.16) 0px 1px 4px;
+    padding: 40px;
+    margin: 20px;
+    border-radius: 10px;
 }
 
-nav a {
-    color: #fff;
-    text-decoration: none;
-    margin-right: 10px;
+#nav-bar {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    width: 100px;
 }
 
-nav a:hover {
+#nav-bar a:hover {
     text-decoration: underline;
 }
 
-#app {
-    padding: 20px;
+#content-container {
+    min-width: 300px;
+    width: 500px;
+    height: 400px;
+    border-left: 3px;
+    border-color: aquamarine;
 }
+
+
