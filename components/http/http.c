@@ -21,10 +21,6 @@
 
 extern const uint8_t index_html_start[] asm("_binary_index_html_start");
 extern const uint8_t index_html_end[]   asm("_binary_index_html_end");
-extern const uint8_t home_html_start[] asm("_binary_home_html_start");
-extern const uint8_t home_html_end[]   asm("_binary_home_html_end");
-extern const uint8_t about_html_start[] asm("_binary_about_html_start");
-extern const uint8_t about_html_end[]   asm("_binary_about_html_end");
 extern const uint8_t script_js_start[] asm("_binary_script_js_start");
 extern const uint8_t script_js_end[]   asm("_binary_script_js_end");
 extern const uint8_t styles_css_start[] asm("_binary_styles_css_start");
@@ -45,8 +41,6 @@ wifi
 esp_err_t configuration_server_index_get(httpd_req_t *req);
 esp_err_t configuration_server_script_get(httpd_req_t *req);
 esp_err_t configuration_server_css_get(httpd_req_t *req);
-esp_err_t configuration_server_about_get(httpd_req_t *req);
-esp_err_t configuration_server_home_get(httpd_req_t *req);
 
 esp_err_t configuration_server_configuration_get(httpd_req_t *req);
 esp_err_t configuration_server_configuration_set(httpd_req_t *req);
@@ -86,20 +80,6 @@ httpd_uri_t configuration_server_uri_styles = {
     .user_ctx = NULL
 };
 
-httpd_uri_t configuration_server_uri_home = {
-    .uri      = "/home.html",
-    .method   = HTTP_GET,
-    .handler  = configuration_server_home,
-    .user_ctx = NULL
-};
-
-httpd_uri_t configuration_server_uri_about = {
-    .uri      = "/about.html",
-    .method   = HTTP_GET,
-    .handler  = configuration_server_about,
-    .user_ctx = NULL
-};
-
 httpd_uri_t configuration_server_uri_script = {
     .uri      = "/script.js",
     .method   = HTTP_GET,
@@ -119,16 +99,6 @@ esp_err_t configuration_server_styles(httpd_req_t *req) {
 
 esp_err_t configuration_server_script(httpd_req_t *req) {
     httpd_resp_send(req, (const char *)script_js_start, script_js_end - script_js_start - 1);
-    return ESP_OK;
-}
-
-esp_err_t configuration_server_home(httpd_req_t *req) {
-    httpd_resp_send(req, (const char *)home_html_start, home_html_end - home_html_start - 1);
-    return ESP_OK;
-}
-
-esp_err_t configuration_server_about(httpd_req_t *req) {
-    httpd_resp_send(req, (const char *)about_html_start, about_html_end - about_html_start - 1);
     return ESP_OK;
 }
 
@@ -728,7 +698,5 @@ void configuration_server_start(void) {
         httpd_register_uri_handler(server, &configuration_server_uri_index);
         httpd_register_uri_handler(server, &configuration_server_uri_styles);
         httpd_register_uri_handler(server, &configuration_server_uri_script);
-        httpd_register_uri_handler(server, &configuration_server_uri_about);
-        httpd_register_uri_handler(server, &configuration_server_uri_home);
     }
 }

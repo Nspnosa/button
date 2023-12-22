@@ -1,81 +1,140 @@
-
-function navigateTo(page) {
-    fetch(`${page}.html`)
-        .then(response => response.text())
-        .then(html => {
-            document.getElementById('content-container').innerHTML = html;
-        })
-        .catch(error => console.error('Error fetching page:', error));
-}
-
-let configuration;
 async function getConfiguration() {
     const response = await fetch("/configuration/button");
-    configuration = await response.json();
-    console.log(configuration);
+    const configuration = await response.json();
+    return configuration;
 }
 
-let actions = [];
-async function getActions() {
-    for (let i = 1; i <= 5; i++) {
-        const response = await fetch(`/configuration/actions/${i}`);
-        actions.push(await response.json());
-    }
-    console.log(actions);
-}
-
-let credentials;
-async function getCredentials() {
-    const response = await fetch(`/configuration/credentials`);
-    credentials = await response.json();
-    console.log(credentials);
-}
-
-let accessPoints = [];
-async function getAccessPoints() {
-    const response = await fetch(`/configuration/ap`);
-    accessPoints = await response.json();
-    console.log(accessPoints);
-}
-
-let deviceConnected; //this should be a boolean instead of an object
-async function getConnectionStatus() {
-    const response = await fetch(`/configuration/connection`);
-    deviceConnected = await response.json();
-    console.log(deviceConnected);
-}
-
-let serverCredentials;
 async function getServerCredentials() {
     const response = await fetch(`/configuration/servercredentials`);
-    serverCredentials = await response.json();
-    console.log(serverCredentials);
+    const serverCredentials = await response.json();
+    return serverCredentials;
 }
 
+async function getAccessPoints() {
+    const response = await fetch(`/configuration/ap`);
+    const accessPoints = await response.json();
+    return accessPoints;
+}
+
+async function getCredentials() {
+    const response = await fetch(`/configuration/credentials`);
+    const credentials = await response.json();
+    return credentials;
+}
+
+async function getAction(id) {
+    const response = await fetch(`/configuration/actions/${id}`);
+    const action = await response.json();
+    return action;
+}
+
+//this should be a boolean instead of an object
+async function getConnectionStatus() {
+    const response = await fetch(`/configuration/connection`);
+    const deviceConnected = await response.json();
+    return deviceConnected;
+}
+
+let currentPath = null;
+
+async function navigateTo(page) {
+    let pageList = page.split('-');
+    let jsonData = {};
+
+    document.getElementById('data').textContent = "LOADING...";
+
+    deleteButton.disabled = false;
+    updateButton.disabled = false;
+
+    currentPath = pageList;
+    switch(pageList[0]) {
+        case "configure":
+            jsonData = await getConfiguration();
+            break;
+        case "provision":
+            jsonData = await getCredentials();
+            break;
+        case "accessPoints":
+            for (let button of buttons) {
+                button.disabled = true;
+            }
+            jsonData = await getAccessPoints();
+            break;
+        case "security":
+            jsonData = await getServerCredentials();
+            break;
+        case "action":
+            jsonData = await getAction(pageList[1]);
+            break;
+    }
+    let prettyPrintedData = JSON.stringify(jsonData, null, 2);
+    document.getElementById('data').textContent = prettyPrintedData;
+}
+
+async function navigationEventListener (event) {
+    const elements = document.getElementsByTagName("a");
+    for (let element of elements) {
+        element.className = "navigation";
+    }
+    event.target.className = "navigation-selected"
+    await navigateTo(event.target.id);
+}
+
+let deleteButton;
+let updateButton;
+
 window.onload = async (event) => {
-    // configuration = {
-    //     debounceMs : 10,
-    //     actionDelayMs : 500,
-    //     longPressMs : 300
-    // };
+    const elements = document.getElementsByClassName("navigation");
+    for (let element of elements) {
+        element.addEventListener("click", navigationEventListener);
+    }
 
-    // actions = Array(5);
-    // for (let action of actions) {
-    //     action = {};
-    // }
+    deleteButton = document.getElementById('delete-button');
+    updateButton = document.getElementById('update-button');
 
-    // credentials = {
-    //     ssid: "anSSID",
-    //     password: "aPassword"
-    // };
+    deleteButton.disabled = true;
+    updateButton.disabled = true;
+    updateButton.addEventListener("click", updateButtonAction);
+}
 
-    // serverCredentials = {
-    //     ssid: "anSSID",
-    //     password: "aPassword"
-    // };
+async function updateButtonAction(event) {
+    let path = "";
+    switch(currentPath[0]) {
+        case "configure":
+            path = "/configuration/button";
+            break;
+        case "provision":
+            path = "/configuration/credentials";
+            break;
+        case "security":
+            path = "/configuration/servercredentials";
+            break;
+        case "action":
+            path = `/configuration/actions/${currentPath[1]}`;
+            break;
+    }
+    try {
+        const response = await fetch(path, {
+            method: "POST",
+            body: document.getElementById('data').textContent, 
 
-    await getConfiguration();
-    await getActions();
-    await getCredentials();
-    await getServerCredentials();
+        });
+    } catch (e) {
+        console.log(e);
+    }
+    const prettyPrintedData = JSON.stringify(response, null, 2);
+    document.getElementById('data').textContent = prettyPrintedData;
+}
+
+function deleteButtonAction(event) {
+    switch(currentPath) {
+        case "configure":
+            break;
+        case "provision":
+            break;
+        case "security":
+            break;
+        case "action":
+            break;
+    }
 }

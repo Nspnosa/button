@@ -8,12 +8,26 @@
 </head>
 <body>
     <div id="main-container">
-        <div id="nav-bar">
-            <a href="#" onclick="navigateTo('configure')">Configure</a>
-            <a href="#" onclick="navigateTo('actions')">Actions</a>
-            <a href="#" onclick="navigateTo('provision')">Provision</a>
+        <div id="left-nav-bar">
+            <a href="#" class="navigation" id="configure">Configure ⚙️</a>
+            <a href="#" class="navigation" id="provision">Provision 🛜</a>
+            <a href="#" class="navigation" id="accessPoints">Nearby AP 🛜</a>
+            <a href="#" class="navigation" id="security">Security 🔐</a>
+            <a href="#" class="navigation" id="action-1">Action 1 ⚡️</a>
+            <a href="#" class="navigation" id="action-2">Action 2 ⚡</a>
+            <a href="#" class="navigation" id="action-3">Action 3 ⚡</a>
+            <a href="#" class="navigation" id="action-4">Action 4 ⚡</a>
+            <a href="#" class="navigation" id="action-5">Action 5 ⚡</a>
+            <a href="#" class="navigation" id="exit">Exit</a>
         </div>
-        <div id="content-container"></div>
+        <div id="content-container">
+            <textarea name="" id="data"></textarea>
+            <textarea name="" id="message"></textarea>
+            <div>
+                <button class="button" id="update-button">Update</button>
+                <button class="button" id="delete-button">Delete</button>
+            </div>
+        </div>
     </div>
     <script src="script.js"></script>
 </body>
